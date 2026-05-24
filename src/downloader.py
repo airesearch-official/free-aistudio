@@ -44,6 +44,18 @@ def restore_binary(repo=DEFAULT_REPO, tag=DEFAULT_TAG, target_dir="/tmp/sd_bin")
         with tarfile.open(tar_path, "r:gz") as tar:
             tar.extractall(path=target_dir)
             
+        # Safeguard: if files were compressed without the 'bin/' subdirectory,
+        # restructure them to 'bin/' so path mappings inside server.py remain clean.
+        root_bin_check = os.path.join(target_dir, "sd-server")
+        if os.path.exists(root_bin_check):
+            print("📦 Binaries extracted at root. Restructuring to bin/ subdirectory...")
+            bin_subdir = os.path.join(target_dir, "bin")
+            os.makedirs(bin_subdir, exist_ok=True)
+            for item in os.listdir(target_dir):
+                if item in [BINARY_FILENAME, "bin"]:
+                    continue
+                shutil.move(os.path.join(target_dir, item), os.path.join(bin_subdir, item))
+            
         # Give permission to binaries
         for bin_name in ["sd-cli", "sd-server"]:
             bin_path = os.path.join(target_dir, "bin", bin_name)
