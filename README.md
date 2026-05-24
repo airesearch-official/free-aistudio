@@ -8,16 +8,33 @@ An optimized, end-to-end production framework to run the **22-Billion parameter 
 
 ---
 
+## 🗺️ Project Status & Roadmap
+
+This studio is designed to be a unified, future-proof suite for running generative AI on free cloud platforms.
+
+- **`[x]` LTX-Video 2.3 Video Pipeline** (Current Release)
+  - Pre-quantized Q3 weights running under VRAM limits.
+  - Native spatial latent upscaling (2.0x) pass.
+  - Synced audio track generation.
+- **`[ ]` Stable Diffusion XL (SDXL) Image Generation** (Upcoming)
+  - Fast C++ inference presets for lightweight image generation.
+- **`[ ]` FLUX.1 Image Generation** (Upcoming)
+  - Quantized Flux GGUF inference setups on T4 GPUs.
+- **`[ ]` Unified Multimodal Web UI** (Upcoming)
+  - Switch between video, image, and audio-only generation modes from a single frontend room.
+
+---
+
 ## 📂 Repository Structure
 
-To support clean execution and future expansions, the repository is split into user-facing notebooks and a modular Python backend:
+To support clean execution, the repository separates user-facing notebooks from the core logic:
 
 ```
 free-aistudio/
 ├── notebooks/
-│   └── ltx2-3-video.ipynb       # 🎬 Main Kaggle Jupyter Notebook
+│   └── ltx2-3-video.ipynb       # 🎬 LTX-Video 2.3 Jupyter Notebook (Import this to Kaggle!)
 ├── src/                         # 🛠️ Backend helper modules
-│   ├── downloader.py            # High-speed model/binary downlader (via aria2c)
+│   ├── downloader.py            # High-speed model/binary downloader (via aria2c)
 │   ├── server.py                # Wrapper to launch the C++ inference server
 │   └── ui.py                    # Gradio frontend interface
 └── requirements.txt             # 🐍 Python dependencies
@@ -27,69 +44,24 @@ free-aistudio/
 
 ## ⚡ Quick Start: How to Run on Kaggle
 
-Follow these simple steps to run the pipeline on Kaggle:
+Rather than creating code from scratch, you import our pre-configured notebook directly.
 
-### 1. Set Up Your Kaggle Environment
-1. Go to [Kaggle](https://www.kaggle.com/) and create a **New Notebook**.
-2. In the right panel, set the **Accelerator** to **GPU T4** (Internet must be **Enabled**).
+### Step 1: Download the Notebook
+Save the user-facing notebook file from this repository to your local machine:
+- 💾 **[ltx2-3-video.ipynb](notebooks/ltx2-3-video.ipynb)** (Or click download on GitHub).
 
-### 2. Run the Initialization Cell
-Copy and paste this code into your first notebook cell to clone the repository and install requirements:
+### Step 2: Upload to Kaggle
+1. Go to [Kaggle Notebooks](https://www.kaggle.com/code) and click **New Notebook**.
+2. Click **File** → **Upload Notebook** and select the `ltx2-3-video.ipynb` file you just downloaded.
+3. In the notebook settings panel (right-hand sidebar):
+   - Set **Accelerator** to **GPU T4** (either 1x or 2x T4).
+   - Ensure **Internet** is turned **On**.
 
-```python
-import os
-
-# 1. Sync the codebase
-if not os.path.exists('/kaggle/working/free-aistudio'):
-    print("📦 Repository not found. Cloning new codebase...")
-    !git clone https://github.com/your-username/free-aistudio.git /kaggle/working/free-aistudio
-else:
-    print("🔄 Repository exists. Syncing latest updates...")
-    !git -C /kaggle/working/free-aistudio pull
-
-# 2. Install dependencies
-!pip install -q -r /kaggle/working/free-aistudio/requirements.txt
-
-# 3. Add to Python Path
-import sys
-sys.path.append('/kaggle/working/free-aistudio')
-```
-
-### 3. Restore the Engine & Weights
-Execute the downloader module to grab the pre-compiled C++ server binary and LTX weights (~20 GB total) in a few minutes:
-
-```python
-from src.downloader import restore_binary, download_models
-
-# Restore C++ engine from GitHub Releases
-restore_binary(repo="your-username/free-aistudio", tag="v1.0.0")
-
-# Download LTX-Video weights
-download_models(preset="LTX-Video-2.3-Q3")
-```
-
-### 4. Launch the C++ Inference Server
-Load the weights into VRAM. The background server takes about 90 seconds to fully warm up:
-
-```python
-from src.server import start_server, tail_logs
-
-# Launch background server
-server_process = start_server(load_audio_vae=True)
-
-# Show active startup log status
-print(tail_logs())
-```
-
-### 5. Launch the Web UI
-Run the Gradio block and click the public shareable link:
-
-```python
-from src.ui import launch
-
-# Launches the interactive video generation web room
-launch()
-```
+### Step 3: Run the Cells
+Once imported, you only need to run the pre-made cells in sequence. The notebook will automatically:
+1. Clone the rest of the repository code.
+2. Download the pre-built CUDA C++ binary and model weights.
+3. Launch the background server and display your Gradio Web UI link.
 
 ---
 
@@ -98,15 +70,6 @@ launch()
 - **VRAM Saving (VAE Tiling)**: Video VAE decoding is split into tiles (`--vae-tiling`) to prevent Kaggle's T4 GPU from running Out-of-Memory (OOM).
 - **Quantization**: Text encoder is loaded as a 2-bit quantized Gemma-3-12B weight (`UD-IQ2_XXS`), and the diffusion model uses `Q3_K_M` GGUF to maintain high-quality outputs within VRAM constraints.
 - **Audio Integration**: The pipeline automatically multiplexes spatial audio alongside video streams when sound triggers are described in prompts.
-
----
-
-## 🚀 Adding Future Models
-
-This workspace layout makes adding image generation models (like SDXL or Flux) easy:
-1. Register new Hugging Face weights under `MODEL_PRESETS` in [`src/downloader.py`](src/downloader.py).
-2. Configure parameters for running those models in [`src/server.py`](src/server.py).
-3. Create a dedicated notebook in [`notebooks/`](notebooks/) calling the new configurations.
 
 ---
 
