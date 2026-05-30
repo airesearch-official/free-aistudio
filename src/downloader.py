@@ -36,7 +36,7 @@ MODEL_PRESETS = {
             "https://huggingface.co/bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
         ],
         "vae": [
-            "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae.safetensors"
+            "https://huggingface.co/airesearch-official/z-image-turbo-vae/resolve/main/ae.safetensors"
         ]
     }
 }
