@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import glob
 import time
 import json
@@ -230,4 +231,163 @@ def build_app():
 def launch():
     """Convenience function to start UI immediately in Kaggle."""
     app = build_app()
+    app.launch(share=True, inline=False)
+
+# =====================================================================
+# Z-Image-Turbo Image Generation UI Components
+# =====================================================================
+
+LORA_DIR = "/tmp/models/loras"
+RES_PRESETS = [
+    ("1:1 (256x256)", 256, 256),
+    ("1:1 (512x512)", 512, 512),
+    ("1:1 (768x768)", 768, 768),
+    ("1:1 (1024x1024)", 1024, 1024),
+    ("16:9 (640x384)", 640, 384),
+    ("16:9 (896x512)", 896, 512),
+    ("16:9 (1024x576)", 1024, 576),
+    ("9:16 (384x640)", 384, 640),
+    ("9:16 (512x896)", 512, 896),
+    ("9:16 (576x1024)", 576, 1024),
+    ("4:3 (640x480)", 640, 480),
+    ("4:3 (768x576)", 768, 576),
+    ("3:2 (768x512)", 768, 512),
+    ("2:3 (512x768)", 512, 768),
+]
+SIZE_OPTIONS = sorted({s for _, w, h in RES_PRESETS for s in (w, h)})
+
+def get_lora_list():
+    """List available LoRA files in the loras directory."""
+    lora_path = Path(LORA_DIR)
+    if not lora_path.exists():
+        return []
+    return [f.name for f in lora_path.glob("*.safetensors")]
+
+def apply_preset(preset_label):
+    for name, w, h in RES_PRESETS:
+        if name == preset_label:
+            return w, h
+    return gr.update(), gr.update()
+
+def scan_image_history():
+    """Scans the working directory for generated image outputs."""
+    image_files = glob.glob("/kaggle/working/gen_*.png")
+    image_files.sort(key=os.path.getmtime, reverse=True)
+    return image_files
+
+def handle_image_generation(prompt, width, height, steps, seed, cfg_scale, selected_loras, lora_strength):
+    """Processes image params and posts to the API server."""
+    # Append LoRA tags to prompt
+    final_prompt = prompt
+    if selected_loras:
+        from pathlib import Path
+        for lora in selected_loras:
+            lora_name = Path(lora).stem
+            final_prompt += f" <lora:{lora_name}:{lora_strength}>"
+
+    payload = {
+        "prompt": str(final_prompt),
+        "negative_prompt": "",
+        "width": int(width),
+        "height": int(height),
+        "seed": int(seed) if int(seed) > 0 else -1,
+        "sample_params": {
+            "scheduler": "discrete",
+            "sample_method": "euler",
+            "sample_steps": int(steps),
+            "cfg_scale": float(cfg_scale),
+        },
+        "output_format": "png",
+        "output_compression": 100,
+    }
+
+    try:
+        r = requests.post(f"{SERVER_URL}/sdcpp/v1/img_gen", json=payload, timeout=30)
+        r.raise_for_status()
+        job_id = r.json()["id"]
+
+        while True:
+            status_res = requests.get(f"{SERVER_URL}/sdcpp/v1/jobs/{job_id}", timeout=10).json()
+            status = status_res.get("status", "unknown")
+
+            if status == "completed":
+                image_bytes = base64.b64decode(status_res["result"]["b64_json"])
+                base_image_path = f"/kaggle/working/gen_{job_id}.png"
+                with open(base_image_path, "wb") as f:
+                    f.write(image_bytes)
+                return base_image_path
+
+            if status in ("failed", "cancelled"):
+                raise gr.Error(build_failure_message(status_res))
+
+            time.sleep(1.5) # Fast polling for image
+
+    except Exception as e:
+        raise gr.Error(f"Could not communicate with the generation server.\n\n{type(e).__name__}: {e}\n\nRecent logs:\n{get_live_logs()}")
+
+def build_image_app():
+    """Constructs and returns the Gradio app blocks for Z-Image-Turbo."""
+    from pathlib import Path
+    with gr.Blocks(theme=gr.themes.Soft()) as app:
+        gr.Markdown("# Z-Image-Turbo Cloud Studio")
+        gr.Markdown("Generate high-speed images using the stable-diffusion.cpp backend on Kaggle.")
+
+        with gr.Row():
+            with gr.Column(scale=1):
+                prompt = gr.Textbox(label="Prompt", value="A large orange octopus on an ocean floor, cinematic, 8k", lines=3)
+                
+                with gr.Row():
+                    preset = gr.Dropdown([n for n, _, _ in RES_PRESETS], value="1:1 (512x512)", label="Resolution Preset")
+                    steps = gr.Slider(1, 50, value=8, step=1, label="Steps")
+                
+                with gr.Row():
+                    width = gr.Dropdown(SIZE_OPTIONS, value=512, label="Width")
+                    height = gr.Dropdown(SIZE_OPTIONS, value=512, label="Height")
+                
+                with gr.Row():
+                    cfg_scale = gr.Slider(0.0, 10.0, value=1.0, step=0.1, label="CFG Scale")
+                    seed = gr.Number(value=0, label="Seed (0 = random)")
+                
+                with gr.Group():
+                    gr.Markdown("### LoRA Support (Place inside `/tmp/models/loras/`)")
+                    with gr.Row():
+                        lora_list = gr.CheckboxGroup(choices=get_lora_list(), label="Select LoRAs")
+                        refresh_btn = gr.Button("Refresh LoRAs", variant="secondary", size="sm")
+                    with gr.Row():
+                        lora_strength = gr.Slider(0.0, 2.0, value=1.0, step=0.1, label="LoRA Strength")
+                    
+                    def refresh_loras():
+                        return gr.update(choices=get_lora_list())
+                    refresh_btn.click(refresh_loras, outputs=[lora_list])
+
+                generate_btn = gr.Button("Generate Image", variant="primary")
+
+            with gr.Column(scale=1):
+                img = gr.Image(label="Result", interactive=False, type="filepath")
+                with gr.Tab("Active Engine Logs"):
+                    log_box = gr.Textbox(label="Live C++ Terminal Output Stream", value="", lines=10, interactive=False)
+                    log_timer = gr.Timer(value=3.0, active=True)
+                    log_timer.tick(fn=get_live_logs, outputs=log_box)
+
+                with gr.Tab("Generation History"):
+                    refresh_history_btn = gr.Button("Refresh History Archive", variant="secondary")
+                    history_gallery = gr.File(label="Generated Image Vault Files", file_count="multiple")
+
+        preset.change(apply_preset, inputs=[preset], outputs=[width, height])
+
+        generate_btn.click(
+            fn=handle_image_generation,
+            inputs=[prompt, width, height, steps, seed, cfg_scale, lora_list, lora_strength],
+            outputs=img,
+        ).then(fn=scan_image_history, outputs=history_gallery)
+
+        refresh_history_btn.click(fn=scan_image_history, outputs=history_gallery)
+        app.load(fn=scan_image_history, outputs=history_gallery)
+
+    app.queue()
+    return app
+
+def launch_image():
+    """Convenience function to start Z-Image-Turbo UI immediately in Kaggle."""
+    app = build_image_app()
     app.launch(share=True, inline=False)
