@@ -295,7 +295,11 @@ def handle_image_generation(prompt, width, height, steps, seed, cfg_scale, selec
             "scheduler": "discrete",
             "sample_method": "euler",
             "sample_steps": int(steps),
-            "cfg_scale": float(cfg_scale),
+            "guidance": {
+                "txt_cfg": float(cfg_scale),
+                "img_cfg": float(cfg_scale),
+                "distilled_guidance": float(cfg_scale)
+            }
         },
         "output_format": "png",
         "output_compression": 100,
