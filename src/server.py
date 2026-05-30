@@ -84,6 +84,7 @@ def start_server(
             "--llm", os.path.join(models_base, "text_encoders/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"),
             "--lora-model-dir", lora_dir,
             "--diffusion-fa",
+            "--vae-tiling",
             "-v",
         ]
     else:
