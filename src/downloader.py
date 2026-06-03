@@ -28,6 +28,23 @@ MODEL_PRESETS = {
             "https://huggingface.co/Lightricks/LTX-2.3/resolve/main/ltx-2.3-spatial-upscaler-x2-1.1.safetensors"
         ]
     },
+    "LTX-Video-2.3-FP8": {
+        "diffusion_models": [
+            "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/diffusion_models/ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors"
+        ],
+        "text_encoders": [
+            "https://huggingface.co/GitMylo/LTX-2-comfy_gemma_fp8_e4m3fn/resolve/main/gemma_3_12B_it_fp8_e4m3fn.safetensors",
+            "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/text_encoders/ltx-2.3_text_projection_bf16.safetensors"
+        ],
+        "vae": [
+            "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/vae/LTX23_video_vae_bf16.safetensors",
+            "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/vae/LTX23_audio_vae_bf16.safetensors",
+            "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/vae/taeltx2_3.safetensors"
+        ],
+        "latent_upscale_models": [
+            "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-spatial-upscaler-x2-1.0.safetensors"
+        ]
+    },
     "Z-Image-Turbo-Q4": {
         "diffusion_models": [
             "https://huggingface.co/unsloth/Z-Image-Turbo-GGUF/resolve/main/z-image-turbo-Q4_0.gguf"
@@ -143,6 +160,45 @@ def clean_filenames(preset="LTX-Video-2.3-Q3", models_base="/tmp/models"):
         if upscale_files and not upscale_files[0].endswith(".safetensors"):
             os.rename(upscale_files[0], os.path.join(models_base, "latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors"))
             print("Mapped Spatial Upscaler name.")
+
+    elif preset == "LTX-Video-2.3-FP8":
+        # 1. Transformer / UNet Model Mapping
+        dit_files = glob.glob(os.path.join(models_base, "diffusion_models/*"))
+        if dit_files and not dit_files[0].endswith(".safetensors"):
+            os.rename(dit_files[0], os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors"))
+            print("Mapped LTX-Video FP8 Transformer model name.")
+
+        # 2. Text Encoder & Connectors Sorting
+        te_files = sorted(glob.glob(os.path.join(models_base, "text_encoders/*")), key=os.path.getsize)
+        if len(te_files) >= 2:
+            if not te_files[0].endswith(".safetensors"):
+                os.rename(te_files[0], os.path.join(models_base, "text_encoders/ltx-2.3_text_projection_bf16.safetensors"))
+            if not te_files[1].endswith(".safetensors"):
+                os.rename(te_files[1], os.path.join(models_base, "text_encoders/gemma_3_12B_it_fp8_e4m3fn.safetensors"))
+            print("Mapped LTX-Video FP8 Text Encoder & Connectors names.")
+
+        # 3. VAE Folder Sorting
+        vae_files = sorted(glob.glob(os.path.join(models_base, "vae/*")), key=os.path.getsize)
+        if len(vae_files) >= 3:
+            if not vae_files[0].endswith(".safetensors"):
+                os.rename(vae_files[0], os.path.join(models_base, "vae/taeltx2_3.safetensors"))
+            if not vae_files[1].endswith(".safetensors"):
+                os.rename(vae_files[1], os.path.join(models_base, "vae/LTX23_audio_vae_bf16.safetensors"))
+            if not vae_files[2].endswith(".safetensors"):
+                os.rename(vae_files[2], os.path.join(models_base, "vae/LTX23_video_vae_bf16.safetensors"))
+            print("Mapped LTX-Video FP8 VAE model names.")
+        elif len(vae_files) == 2:
+            if not vae_files[0].endswith(".safetensors"):
+                os.rename(vae_files[0], os.path.join(models_base, "vae/LTX23_audio_vae_bf16.safetensors"))
+            if not vae_files[1].endswith(".safetensors"):
+                os.rename(vae_files[1], os.path.join(models_base, "vae/LTX23_video_vae_bf16.safetensors"))
+            print("Mapped 2 LTX-Video FP8 VAE model names.")
+
+        # 4. Latent Spatial Upscaler Correction
+        upscale_files = glob.glob(os.path.join(models_base, "latent_upscale_models/*"))
+        if upscale_files and not upscale_files[0].endswith(".safetensors"):
+            os.rename(upscale_files[0], os.path.join(models_base, "latent_upscale_models/ltx-2-spatial-upscaler-x2-1.0.safetensors"))
+            print("Mapped Spatial Upscaler 1.0 name.")
 
     elif preset == "Z-Image-Turbo-Q4":
         # 1. Main Base Model Mapping

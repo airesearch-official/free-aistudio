@@ -55,6 +55,47 @@ def start_server(
         if load_audio_vae:
             server_cmd += ["--audio-vae", os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors")]
 
+    elif preset == "LTX-Video-2.3-FP8":
+        upscaler_model = os.path.join(models_base, "latent_upscale_models/ltx-2-spatial-upscaler-x2-1.0.safetensors")
+        upscaler_dir = os.path.dirname(upscaler_model)
+        
+        required_paths = [
+            bin_path,
+            os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors"),
+            os.path.join(models_base, "vae/LTX23_video_vae_bf16.safetensors"),
+            os.path.join(models_base, "text_encoders/gemma_3_12B_it_fp8_e4m3fn.safetensors"),
+            os.path.join(models_base, "text_encoders/ltx-2.3_text_projection_bf16.safetensors"),
+            upscaler_model,
+        ]
+        
+        if load_audio_vae:
+            required_paths.append(os.path.join(models_base, "vae/LTX23_audio_vae_bf16.safetensors"))
+            
+        missing = [p for p in required_paths if not os.path.exists(p)]
+        if missing:
+            raise FileNotFoundError(
+                "Missing required files for LTX-Video FP8:\n" + "\n".join(missing) +
+                "\nPlease run the downloader first!"
+            )
+            
+        print("Starting stable-diffusion.cpp API server with LTX-Video FP8 paths...")
+        server_cmd = [
+            bin_path,
+            "--listen-ip", "127.0.0.1",
+            "--listen-port", str(port),
+            "--threads", str(threads),
+            "--diffusion-model", os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors"),
+            "--vae", os.path.join(models_base, "vae/LTX23_video_vae_bf16.safetensors"),
+            "--llm", os.path.join(models_base, "text_encoders/gemma_3_12B_it_fp8_e4m3fn.safetensors"),
+            "--embeddings-connectors", os.path.join(models_base, "text_encoders/ltx-2.3_text_projection_bf16.safetensors"),
+            "--hires-upscalers-dir", upscaler_dir,
+            "--diffusion-fa",
+            "--vae-tiling",
+            "-v",
+        ]
+        if load_audio_vae:
+            server_cmd += ["--audio-vae", os.path.join(models_base, "vae/LTX23_audio_vae_bf16.safetensors")]
+
     elif preset == "Z-Image-Turbo-Q4":
         lora_dir = os.path.join(models_base, "loras")
         os.makedirs(lora_dir, exist_ok=True)

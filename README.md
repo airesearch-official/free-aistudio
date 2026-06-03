@@ -20,6 +20,10 @@ This studio is designed to be a unified, future-proof suite for running generati
   - Ultra-fast image generation utilizing GGUF models.
   - High-speed inference (under 2 seconds per image) using persistent server RAM configurations.
   - Custom resolution presets and LoRA support.
+- **`[x]` Lightning.ai High-Quality Studio** (Current Release)
+  - High-quality FP8 models (`LTX-Video-2.3-FP8`) running entirely on GPU VRAM (no CPU offload).
+  - Persistent model caching across server restarts.
+  - One-click launch command via `run_lightning.py`.
 - **`[ ]` More Models & Features Coming Soon!**
   - New generative features and community-requested presets will be added as they arrive.
 
@@ -27,17 +31,19 @@ This studio is designed to be a unified, future-proof suite for running generati
 
 ## 📂 Repository Structure
 
-To support clean execution, the repository separates user-facing notebooks from the core logic:
+To support clean execution, the repository separates user-facing entry points from the core logic:
 
 ```
 free-aistudio/
 ├── notebooks/
-│   ├── ltx2-3-video.ipynb       # 🎬 LTX-Video 2.3 Jupyter Notebook (Video Studio)
-│   └── z-image-turbo.ipynb      # 🖼️ Z-Image-Turbo Jupyter Notebook (Image Studio)
+│   ├── ltx2-3-video.ipynb       # 🎬 LTX-Video 2.3 Jupyter Notebook (Kaggle Video Studio)
+│   ├── z-image-turbo.ipynb      # 🖼️ Z-Image-Turbo Jupyter Notebook (Kaggle Image Studio)
+│   └── lightning-video.ipynb    # 🎬 LTX-Video 2.3 FP8 Notebook (Lightning.ai Studio)
 ├── src/                         # 🛠️ Backend helper modules
-│   ├── downloader.py            # High-speed model/binary downloader (via aria2c)
+│   ├── downloader.py            # High-speed model/binary downloader
 │   ├── server.py                # Wrapper to launch the C++ inference server
 │   └── ui.py                    # Gradio frontend interface
+├── run_lightning.py             # ⚡ One-click Python startup CLI for Lightning.ai
 └── requirements.txt             # 🐍 Python dependencies
 ```
 
@@ -61,6 +67,25 @@ Save one of the user-facing notebooks from this repository to your local machine
 
 ### Step 3: Run the Cells
 Once imported, you only need to run the pre-made cells in sequence. The notebook will automatically sync the repository code, download the pre-built C++ server binary and optimized model weights, launch the background API inference server, and display your Gradio Web UI link.
+
+---
+
+## ⚡ Quick Start: How to Run on Lightning.ai
+
+You can run the high-quality FP8 model studio in any CUDA-enabled Lightning.ai Studio (e.g., L4 or L40S GPU).
+
+### Option A: Using the Jupyter Notebook
+1. Open your Lightning.ai Studio.
+2. In the workspace file explorer, navigate to `notebooks/lightning-video.ipynb`.
+3. Open the notebook and run the cells in sequence.
+
+### Option B: Using the One-Click CLI Script
+1. Open a terminal in your Lightning.ai Studio.
+2. Execute the python runner script:
+   ```bash
+   python run_lightning.py
+   ```
+3. The script will restore the engine binary, check/download the FP8 model weights persistently, launch the background C++ server, and open the Gradio interface. Press `Ctrl+C` in the terminal to cleanly terminate the background processes when you are done.
 
 ---
 

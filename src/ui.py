@@ -12,9 +12,31 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning, message=".*browser-compatible container.*")
 
 SERVER_URL = "http://127.0.0.1:1234"
-LOG_PATH = "/kaggle/working/server.log"
-UPSCALER_MODEL = "/tmp/models/latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors"
-UPSCALER_MODEL_NAME = os.path.splitext(os.path.basename(UPSCALER_MODEL))[0]
+if os.path.exists("/teamspace/studios/this_studio"):
+    LOG_PATH = "/teamspace/studios/this_studio/server.log"
+else:
+    LOG_PATH = "/kaggle/working/server.log"
+
+def get_models_base():
+    """Returns the base models directory depending on the environment."""
+    if os.path.exists("/teamspace/studios/this_studio"):
+        return "/teamspace/studios/this_studio/models"
+    return "/tmp/models"
+
+def get_upscaler_info():
+    """Scans the latent_upscale_models directory for a safetensors upscaler."""
+    base = get_models_base()
+    upscale_dir = os.path.join(base, "latent_upscale_models")
+    if os.path.exists(upscale_dir):
+        import glob
+        files = glob.glob(os.path.join(upscale_dir, "*.safetensors"))
+        if files:
+            path = files[0]
+            name = os.path.splitext(os.path.basename(path))[0]
+            return path, name
+    # Fallback to standard Kaggle/Default path
+    fallback = os.path.join(base, "latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors")
+    return fallback, os.path.splitext(os.path.basename(fallback))[0]
 
 def get_vae_tiling_params(enable_upscale):
     if enable_upscale:
@@ -130,12 +152,13 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
         payload["prompt"] = f"{payload['prompt']}, high quality clear audio"
 
     if enable_upscale:
-        if not os.path.exists(UPSCALER_MODEL):
-            raise gr.Error(f"Upscaling is enabled, but the upscaler model is missing:\n{UPSCALER_MODEL}\n\nRun download step first.")
+        upscaler_path, upscaler_name = get_upscaler_info()
+        if not os.path.exists(upscaler_path):
+            raise gr.Error(f"Upscaling is enabled, but the upscaler model is missing:\n{upscaler_path}\n\nRun download step first.")
 
         payload["hires"] = {
             "enabled": True,
-            "upscaler": UPSCALER_MODEL_NAME,
+            "upscaler": upscaler_name,
             "scale": 2.0,
             "steps": 10,
             "denoising_strength": 0.7,
