@@ -96,21 +96,86 @@ def restore_binary(repo=DEFAULT_REPO, tag=DEFAULT_TAG, target_dir="/tmp/sd_bin")
         print(f"❌ Error restoring binary: {e}")
         print("Please check if the GitHub Release tag exists and contains the required file.")
 
+def python_download(url, dest_dir):
+    """Fallback python downloader when aria2 is not available."""
+    import urllib.request
+    import time
+    
+    filename = url.split("/")[-1]
+    dest_path = os.path.join(dest_dir, filename)
+    
+    print(f"📥 Downloading via Python fallback: {filename}...")
+    
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    )
+    
+    try:
+        with urllib.request.urlopen(req) as response:
+            meta = response.info()
+            file_size = int(meta.get("Content-Length", 0))
+            
+            chunk_size = 8 * 1024 * 1024  # 8MB chunks
+            downloaded = 0
+            start_time = time.time()
+            last_print = start_time
+            
+            with open(dest_path, "wb") as f:
+                while True:
+                    buffer = response.read(chunk_size)
+                    if not buffer:
+                        break
+                    downloaded += len(buffer)
+                    f.write(buffer)
+                    
+                    current_time = time.time()
+                    if current_time - last_print > 5:
+                        speed = downloaded / (current_time - start_time) / (1024 * 1024)  # MB/s
+                        percent = (downloaded / file_size) * 100 if file_size > 0 else 0
+                        print(f"   ↳ {downloaded / (1024*1024):.1f} MB / {file_size / (1024*1024):.1f} MB ({percent:.1f}%) @ {speed:.2f} MB/s")
+                        last_print = current_time
+                        
+            total_time = time.time() - start_time
+            print(f"✅ Finished downloading {filename} in {total_time:.1f}s.")
+    except Exception as e:
+        print(f"❌ Error downloading {url} via Python fallback: {e}")
+        if os.path.exists(dest_path):
+            try:
+                os.remove(dest_path)
+            except Exception:
+                pass
+        raise e
+
 def setup_aria2():
-    """Installs aria2 on Kaggle if not already present."""
-    if shutil.which("aria2c") is None:
-        print("📥 Installing aria2 high-speed download framework...")
-        subprocess.run("apt-get update -qq && apt-get install -y -qq aria2", shell=True)
-    else:
+    """Installs aria2 if not already present, using sudo if required."""
+    if shutil.which("aria2c") is not None:
         print("✅ aria2 framework is already installed.")
+        return
+        
+    print("📥 Installing aria2 high-speed download framework...")
+    try:
+        is_root = (os.getuid() == 0)
+    except AttributeError:
+        is_root = True
+        
+    use_sudo = ""
+    if not is_root and shutil.which("sudo") is not None:
+        use_sudo = "sudo "
+        
+    cmd = f"{use_sudo}apt-get update -qq && {use_sudo}apt-get install -y -qq aria2"
+    res = subprocess.run(cmd, shell=True)
+    if res.returncode != 0:
+        print("⚠️ Failed to install aria2. Will automatically use Python fallback downloader.")
 
 def download_models(preset="LTX-Video-2.3-Q3", models_base="/tmp/models"):
-    """Downloads weights for a selected preset using aria2c."""
+    """Downloads weights for a selected preset using aria2c (or Python fallback)."""
     if preset not in MODEL_PRESETS:
         raise ValueError(f"Unknown preset '{preset}'. Available: {list(MODEL_PRESETS.keys())}")
         
     setup_aria2()
     config = MODEL_PRESETS[preset]
+    use_aria2 = shutil.which("aria2c") is not None
     
     print(f"\n--- ⚡ Starting weight downloads for preset: {preset} ---")
     for category, urls in config.items():
@@ -119,10 +184,22 @@ def download_models(preset="LTX-Video-2.3-Q3", models_base="/tmp/models"):
         
         for url in urls:
             filename = url.split("/")[-1]
+            dest_file = os.path.join(cat_dir, filename)
+            
+            # Skip if file already exists and is fully downloaded (not a small temp file)
+            if os.path.exists(dest_file) and os.path.getsize(dest_file) > 10 * 1024 * 1024:
+                print(f"✅ {filename} already exists. Skipping download.")
+                continue
+                
             print(f"→ Downloading {filename} to {cat_dir}...")
-            # aria2c command for fast multi-threaded download
-            cmd = f'aria2c -x 16 -s 16 -k 1M -d "{cat_dir}" "{url}"'
-            subprocess.run(cmd, shell=True)
+            if use_aria2:
+                cmd = f'aria2c -x 16 -s 16 -k 1M -d "{cat_dir}" "{url}"'
+                res = subprocess.run(cmd, shell=True)
+                if res.returncode != 0:
+                    print(f"⚠️ aria2c failed for {filename}. Trying Python fallback...")
+                    python_download(url, cat_dir)
+            else:
+                python_download(url, cat_dir)
             
     print("\n🧹 Correcting model filename path structures (checking hashes)...")
     clean_filenames(preset, models_base)
