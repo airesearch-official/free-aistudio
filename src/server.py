@@ -58,7 +58,8 @@ def start_server(
     threads=4,
     offload_to_cpu=False,
     wait_timeout=120,
-    fail_on_timeout=False
+    fail_on_timeout=False,
+    diffusion_fa=True
 ):
     """Spawns the stable-diffusion.cpp API server in the background and saves logs."""
     
@@ -96,11 +97,12 @@ def start_server(
             "--llm", os.path.join(models_base, "text_encoders/gemma-3-12b-it-UD-IQ2_XXS.gguf"),
             "--embeddings-connectors", os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"),
             "--hires-upscalers-dir", upscaler_dir,
-            "--diffusion-fa",
             "--offload-to-cpu",
             "--vae-tiling",
             "-v",
         ]
+        if diffusion_fa:
+            server_cmd += ["--diffusion-fa"]
         if load_audio_vae:
             server_cmd += ["--audio-vae", os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors")]
 
@@ -138,10 +140,11 @@ def start_server(
             "--llm", os.path.join(models_base, "text_encoders/gemma-3-12b-it-Q8_0.gguf"),
             "--embeddings-connectors", os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"),
             "--hires-upscalers-dir", upscaler_dir,
-            "--diffusion-fa",
             "--vae-tiling",
             "-v",
         ]
+        if diffusion_fa:
+            server_cmd += ["--diffusion-fa"]
         if offload_to_cpu:
             server_cmd += ["--offload-to-cpu"]
         if load_audio_vae:
@@ -175,10 +178,11 @@ def start_server(
             "--vae", os.path.join(models_base, "vae/ae.safetensors"),
             "--llm", os.path.join(models_base, "text_encoders/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"),
             "--lora-model-dir", lora_dir,
-            "--diffusion-fa",
             "--vae-tiling",
             "-v",
         ]
+        if diffusion_fa:
+            server_cmd += ["--diffusion-fa"]
     else:
         raise ValueError(f"Unknown preset: {preset}")
         

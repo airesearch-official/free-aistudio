@@ -7,6 +7,7 @@ import base64
 import requests
 import warnings
 import gradio as gr
+from requests.exceptions import ReadTimeout
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning, message=".*browser-compatible container.*")
@@ -30,6 +31,9 @@ def get_models_base():
     if os.path.exists("/teamspace/studios/this_studio"):
         return "/teamspace/studios/this_studio/models"
     return "/tmp/models"
+
+def is_lightning_studio():
+    return os.path.exists("/teamspace/studios/this_studio")
 
 def get_upscaler_info():
     """Scans the latent_upscale_models directory for a safetensors upscaler."""
@@ -184,9 +188,23 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
         r = requests.post(f"{SERVER_URL}/sdcpp/v1/vid_gen", json=payload, timeout=30)
         r.raise_for_status()
         job_id = r.json()["id"]
+        status_timeouts = 0
 
         while True:
-            status_res = requests.get(f"{SERVER_URL}/sdcpp/v1/jobs/{job_id}", timeout=10).json()
+            try:
+                status_res = requests.get(f"{SERVER_URL}/sdcpp/v1/jobs/{job_id}", timeout=120).json()
+                status_timeouts = 0
+            except ReadTimeout:
+                status_timeouts += 1
+                if status_timeouts >= 3:
+                    raise gr.Error(
+                        "The generation server is not responding to status checks.\n\n"
+                        "This usually means the backend is stuck in a long CUDA operation or hit a CUDA error.\n\n"
+                        f"Recent logs:\n{get_live_logs()}"
+                    )
+                time.sleep(8)
+                continue
+
             status = status_res.get("status", "unknown")
 
             if status == "completed":
@@ -208,6 +226,10 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
 
 def build_app():
     """Constructs and returns the Gradio app blocks."""
+    default_resolution = "360p (480x360) - Fastest Testing Baseline" if is_lightning_studio() else "480p (640x368) - Optimized Safe Balanced Size"
+    default_duration = 2 if is_lightning_studio() else 5
+    default_steps = 6 if is_lightning_studio() else 8
+
     with gr.Blocks(theme=gr.themes.Soft()) as app:
         gr.Markdown("# LTX-Video 2.3 Studio Cloud Interface")
         gr.Markdown("Generate videos with the controls below. Use the engine logs tab for live progress and error details.")
@@ -223,7 +245,7 @@ def build_app():
                         "480p (640x368) - Optimized Safe Balanced Size",
                         "720p (832x480) - High Resolution Cinematic Layout",
                     ],
-                    value="480p (640x368) - Optimized Safe Balanced Size",
+                    value=default_resolution,
                     label="Core Video Generation Dimensions",
                 )
 
@@ -232,8 +254,8 @@ def build_app():
                     custom_width = gr.Slider(minimum=256, maximum=1920, value=640, step=32, label="Custom Width")
                     custom_height = gr.Slider(minimum=256, maximum=1088, value=384, step=32, label="Custom Height")
 
-                duration_seconds = gr.Slider(minimum=1, maximum=10, value=5, step=0.5, label="Duration Seconds (rounded to valid LTX frame count)")
-                steps = gr.Slider(minimum=4, maximum=30, value=8, step=1, label="Sampling Steps (LTX 2.3 Distilled Sweet Spot: 8-12)")
+                duration_seconds = gr.Slider(minimum=1, maximum=10, value=default_duration, step=0.5, label="Duration Seconds (rounded to valid LTX frame count)")
+                steps = gr.Slider(minimum=4, maximum=30, value=default_steps, step=1, label="Sampling Steps (LTX 2.3 Distilled Sweet Spot: 8-12)")
 
                 enable_upscale = gr.Checkbox(label="Enable Native Hi-Res Upscaling Pass", value=False)
                 input_image = gr.Image(label="Input Image (For Image-to-Video)", type="filepath")

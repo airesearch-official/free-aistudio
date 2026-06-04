@@ -30,6 +30,7 @@ def main():
     log_path = "/teamspace/studios/this_studio/server.log"
     full_gpu = os.environ.get("FREE_AISTUDIO_LIGHTNING_FULL_GPU", "").lower() in ("1", "true", "yes", "on")
     load_audio_vae = os.environ.get("FREE_AISTUDIO_DISABLE_AUDIO_VAE", "").lower() not in ("1", "true", "yes", "on")
+    diffusion_fa = os.environ.get("FREE_AISTUDIO_LIGHTNING_DIFFUSION_FA", "").lower() in ("1", "true", "yes", "on")
     wait_timeout = int(os.environ.get("FREE_AISTUDIO_SERVER_WAIT_TIMEOUT", "300"))
     
     # 1. Restore the C++ compilation binary if missing
@@ -44,6 +45,10 @@ def main():
         print("Running Lightning FP8/Q8 preset in full-GPU mode. Use this only on GPUs with substantially more than 24GB VRAM.")
     else:
         print("Running Lightning FP8/Q8 preset with CPU offload enabled to fit 24GB GPUs such as L4.")
+    if diffusion_fa:
+        print("Diffusion flash-attention is enabled for Lightning.")
+    else:
+        print("Diffusion flash-attention is disabled for Lightning to avoid CUDA kernel failures during video generation.")
 
     server_process = start_server(
         preset="LTX-Video-2.3-FP8",
@@ -53,7 +58,8 @@ def main():
         load_audio_vae=load_audio_vae,
         offload_to_cpu=not full_gpu,
         wait_timeout=wait_timeout,
-        fail_on_timeout=True
+        fail_on_timeout=True,
+        diffusion_fa=diffusion_fa
     )
     
     # Handler for clean exit (preventing GPU process leaks)

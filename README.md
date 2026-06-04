@@ -112,6 +112,11 @@ By default, the Lightning launcher enables CPU offload so the high-quality prese
 FREE_AISTUDIO_LIGHTNING_FULL_GPU=1 python run_lightning.py
 ```
 
+The Lightning launcher disables diffusion flash-attention by default because some CUDA kernels can fail during video generation with the Q8 GGUF stack. To compare speed/stability on a larger GPU, opt back in:
+```bash
+FREE_AISTUDIO_LIGHTNING_DIFFUSION_FA=1 python run_lightning.py
+```
+
 ---
 
 ## 💡 Key Configurations & Optimizations
