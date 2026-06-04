@@ -21,7 +21,7 @@ This studio is designed to be a unified, future-proof suite for running generati
   - High-speed inference (under 2 seconds per image) using persistent server RAM configurations.
   - Custom resolution presets and LoRA support.
 - **`[x]` Lightning.ai High-Quality Studio** (Current Release)
-  - High-quality stable-diffusion.cpp GGUF preset (`LTX-Video-2.3-FP8`) with Q8 diffusion/text models and CPU offload enabled by default for 24GB GPUs such as L4.
+  - High-quality stable-diffusion.cpp GGUF preset (`LTX-Video-2.3-FP8`) with Q8 diffusion and a smaller GGUF text encoder for GPU headroom.
   - Persistent model caching across server restarts.
   - One-click launch command via `run_lightning.py`.
 - **`[ ]` More Models & Features Coming Soon!**
@@ -107,9 +107,14 @@ Choose one of the two easy methods to start the UI:
 2. The script will build the latest tested upstream stable-diffusion.cpp CUDA server for Lightning, download the GGUF Q8 model weights persistently, launch the background C++ server, and open the Gradio Web UI with a public `*.gradio.live` link.
 3. When you are done generating, simply press **`Ctrl + C`** in your terminal to safely stop the background processes and free up GPU memory.
 
-By default, the Lightning launcher enables CPU offload so the high-quality preset can start on 24GB GPUs such as L4. On larger VRAM machines, you can opt into full-GPU loading:
+By default, the Lightning launcher auto-detects GPU memory. A100-class GPUs run on GPU; smaller 24GB GPUs such as L4 use CPU offload. You can force GPU mode:
 ```bash
 FREE_AISTUDIO_LIGHTNING_FULL_GPU=1 python run_lightning.py
+```
+
+You can force CPU offload:
+```bash
+FREE_AISTUDIO_LIGHTNING_CPU_OFFLOAD=1 python run_lightning.py
 ```
 
 The Lightning launcher disables diffusion flash-attention by default because some CUDA kernels can fail during video generation with the Q8 GGUF stack. To compare speed/stability on a larger GPU, opt back in:

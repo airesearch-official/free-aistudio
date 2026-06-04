@@ -20,6 +20,20 @@ from src.downloader import restore_binary, download_models, build_binary_from_so
 from src.server import start_server
 from src.ui import build_app
 
+def detect_cuda_vram_gb():
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        values = [int(line.strip()) for line in out.splitlines() if line.strip()]
+        if values:
+            return max(values) / 1024
+    except Exception:
+        pass
+    return 0
+
 def main():
     print("🚀 Starting AI Studio on Lightning.ai...")
     
@@ -28,7 +42,13 @@ def main():
     bin_dir = "/teamspace/studios/this_studio/sd_bin"
     bin_path = os.path.join(bin_dir, "bin/sd-server")
     log_path = "/teamspace/studios/this_studio/server.log"
-    full_gpu = os.environ.get("FREE_AISTUDIO_LIGHTNING_FULL_GPU", "").lower() in ("1", "true", "yes", "on")
+    full_gpu_env = os.environ.get("FREE_AISTUDIO_LIGHTNING_FULL_GPU", "").lower()
+    force_cpu_offload_env = os.environ.get("FREE_AISTUDIO_LIGHTNING_CPU_OFFLOAD", "").lower()
+    detected_vram_gb = detect_cuda_vram_gb()
+    full_gpu = (
+        full_gpu_env in ("1", "true", "yes", "on")
+        or (not full_gpu_env and force_cpu_offload_env not in ("1", "true", "yes", "on") and detected_vram_gb >= 35)
+    )
     load_audio_vae = os.environ.get("FREE_AISTUDIO_DISABLE_AUDIO_VAE", "").lower() not in ("1", "true", "yes", "on")
     diffusion_fa = os.environ.get("FREE_AISTUDIO_LIGHTNING_DIFFUSION_FA", "").lower() in ("1", "true", "yes", "on")
     wait_timeout = int(os.environ.get("FREE_AISTUDIO_SERVER_WAIT_TIMEOUT", "300"))
@@ -47,9 +67,9 @@ def main():
     
     # 3. Start the background stable-diffusion.cpp inference server
     if full_gpu:
-        print("Running Lightning FP8/Q8 preset in full-GPU mode. Use this only on GPUs with substantially more than 24GB VRAM.")
+        print(f"Running Lightning GGUF Q8 preset on GPU. Detected VRAM: {detected_vram_gb:.1f}GB.")
     else:
-        print("Running Lightning FP8/Q8 preset with CPU offload enabled to fit 24GB GPUs such as L4.")
+        print(f"Running Lightning GGUF Q8 preset with CPU offload. Detected VRAM: {detected_vram_gb:.1f}GB.")
     if diffusion_fa:
         print("Diffusion flash-attention is enabled for Lightning.")
     else:
