@@ -51,30 +51,9 @@ def get_upscaler_info():
     fallback = os.path.join(base, "latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors")
     return fallback, os.path.splitext(os.path.basename(fallback))[0]
 
-def get_vae_tiling_params(enable_upscale):
-    if is_lightning_studio():
-        return {
-            "enabled": True,
-            "temporal_tiling": True,
-            "tile_size_x": 16,
-            "tile_size_y": 16,
-            "target_overlap": 0.25,
-            "rel_size_x": 0.0,
-            "rel_size_y": 0.0,
-            "extra_tiling_args": "temporal_tile_frames=4,temporal_tile_overlap=1",
-        }
-
-    if enable_upscale:
-        return {
-            "enabled": True,
-            "temporal_tiling": True,
-            "tile_size_x": 16,
-            "tile_size_y": 16,
-            "target_overlap": 0.25,
-            "rel_size_x": 0.0,
-            "rel_size_y": 0.0,
-            "extra_tiling_args": "temporal_tile_frames=4,temporal_tile_overlap=1",
-        }
+def get_vae_tiling_params(enable_tiling):
+    if not enable_tiling:
+        return {"enabled": False}
     return {
         "enabled": True,
         "temporal_tiling": True,
@@ -215,8 +194,8 @@ def build_failure_message(status_res):
 
     return "Video generation failed.\n\n" + "\n\n".join(parts)
 
-def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_custom_resolution, custom_width, custom_height, duration_seconds, input_image, enable_upscale, cfg_scale, distilled_guidance, scheduler, flow_shift):
-    """Processes frontend inputs and posts generation parameters to the server."""
+def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_custom_resolution, custom_width, custom_height, duration_seconds, input_image, enable_upscale, cfg_scale, distilled_guidance, scheduler, flow_shift, enable_vae_tiling):
+    """Processes frontend inputs and generates video using either CLI (Lightning.ai) or HTTP API (Kaggle)."""
     if use_custom_resolution:
         width, height = int(custom_width), int(custom_height)
         if width % 32 != 0 or height % 32 != 0:
@@ -224,7 +203,7 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
         if width < 256 or height < 256:
             raise gr.Error("Custom width and height must be at least 256 pixels.")
         if width > 1920 or height > 1088:
-            raise gr.Error("Custom resolution is capped at 1920x1088 for this Kaggle notebook.")
+            raise gr.Error("Custom resolution is capped at 1920x1088.")
     elif "360p" in resolution_preset:
         width, height = 480, 360  # Proven fast baseline
     elif "480p" in resolution_preset:
@@ -232,97 +211,194 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
     else:
         width, height = 832, 480
 
-    fps = 12
+    fps = 24 if is_lightning_studio() else 12  # Use 24 fps on Lightning as per user CLI test
     target_frames = max(9, int(round(float(duration_seconds) * fps)))
-    frames = min(121, ((target_frames - 1 + 7) // 8) * 8 + 1)  # LTX video frame count rule: 8N + 1.
+    frames = min(121, ((target_frames - 1 + 8) // 8) * 8 + 1)  # LTX video frame count rule: 8N + 1.
 
-    payload = {
-        "prompt": str(prompt),
-        "negative_prompt": str(negative_prompt),
-        "width": int(width),
-        "height": int(height),
-        "strength": 0.75 if input_image else 1.0,
-        "seed": -1,
-        "video_frames": int(frames),
-        "fps": fps,
-        "moe_boundary": 0.875,
-        "vace_strength": 1.0,
-        "sample_params": {
-            "scheduler": str(scheduler),
-            "sample_method": "euler",
-            "sample_steps": int(steps),
-            "flow_shift": float(flow_shift),
-            "guidance": {
-                "txt_cfg": float(cfg_scale),
-                "img_cfg": float(cfg_scale),
-                "distilled_guidance": float(distilled_guidance)
+    if is_lightning_studio():
+        # Setup paths
+        bin_dir = "/teamspace/studios/this_studio/sd_bin"
+        cli_path = os.path.join(bin_dir, "bin/sd-cli")
+        models_base = "/teamspace/studios/this_studio/models"
+        working_dir = get_working_dir()
+        os.makedirs(working_dir, exist_ok=True)
+        
+        job_id = str(int(time.time()))
+        output_ext = "webm"
+        base_video_path = os.path.join(working_dir, f"gen_{job_id}.{output_ext}")
+        
+        # Build command-line list
+        cmd = [
+            cli_path,
+            "-M", "vid_gen",
+            "--diffusion-model", os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-Q8_0.gguf"),
+            "--vae", os.path.join(models_base, "vae/ltx-2.3-22b-distilled_video_vae.safetensors"),
+            "--llm", os.path.join(models_base, "text_encoders/gemma-3-12b-it-Q6_K.gguf"),
+            "--embeddings-connectors", os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"),
+            "-p", str(prompt),
+            "-n", str(negative_prompt),
+            "--cfg-scale", str(cfg_scale),
+            "--guidance", str(distilled_guidance),
+            "--sampling-method", "euler",
+            "--steps", str(steps),
+            "-W", str(width),
+            "-H", str(height),
+            "--video-frames", str(frames),
+            "--fps", str(fps),
+            "-o", base_video_path,
+            "-v"
+        ]
+        
+        if os.path.exists(os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors")):
+            cmd += ["--audio-vae", os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors")]
+            
+        cmd += ["--offload-to-cpu"]
+        cmd += ["--diffusion-fa"]
+        
+        if scheduler != "default" and scheduler != "none":
+            cmd += ["--scheduler", str(scheduler)]
+            if flow_shift > 0:
+                cmd += ["--flow-shift", str(flow_shift)]
+        elif flow_shift > 0 and abs(flow_shift - 2.37) > 0.001 and abs(flow_shift - 1.3568) > 0.001:
+            cmd += ["--flow-shift", str(flow_shift)]
+
+        if enable_vae_tiling:
+            cmd += ["--vae-tiling"]
+            cmd += ["--extra-tiling-args", "temporal_tile_frames=4,temporal_tile_overlap=1"]
+
+        if input_image is not None and os.path.exists(input_image):
+            cmd += ["--init-image", str(input_image)]
+            
+        print(f"🚀 Running CLI generation command:\n{' '.join(cmd)}")
+        
+        env = os.environ.copy()
+        from src.server import find_cuda_library_paths
+        valid_paths = find_cuda_library_paths()
+        existing_ld = env.get("LD_LIBRARY_PATH", "")
+        if existing_ld:
+            env["LD_LIBRARY_PATH"] = ":".join(valid_paths) + ":" + existing_ld
+        else:
+            env["LD_LIBRARY_PATH"] = ":".join(valid_paths)
+            
+        # Write real-time output to LOG_PATH
+        log_file = open(LOG_PATH, "w")
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                env=env
+            )
+            
+            while process.poll() is None:
+                time.sleep(1)
+                
+            log_file.close()
+            
+            if process.returncode != 0:
+                with open(LOG_PATH, "r") as f:
+                    recent_logs = "".join(f.readlines()[-30:])
+                raise gr.Error(f"CLI generation failed with code {process.returncode}.\n\nRecent logs:\n{recent_logs}")
+                
+            print(f"✅ CLI generation completed! Saved to {base_video_path}")
+            return make_preview_video(base_video_path)
+            
+        except Exception as e:
+            try:
+                log_file.close()
+            except Exception:
+                pass
+            raise gr.Error(f"Error during CLI execution: {e}")
+
+    else:
+        # HTTP API generation (Kaggle or local fallback)
+        payload = {
+            "prompt": str(prompt),
+            "negative_prompt": str(negative_prompt),
+            "width": int(width),
+            "height": int(height),
+            "strength": 0.75 if input_image else 1.0,
+            "seed": -1,
+            "video_frames": int(frames),
+            "fps": fps,
+            "moe_boundary": 0.875,
+            "vace_strength": 1.0,
+            "sample_params": {
+                "scheduler": str(scheduler) if scheduler != "default" else "discrete",
+                "sample_method": "euler",
+                "sample_steps": int(steps),
+                "flow_shift": float(flow_shift) if flow_shift > 0 else (1.3568 if scheduler == "discrete" or scheduler == "default" else 2.37),
+                "guidance": {
+                    "txt_cfg": float(cfg_scale),
+                    "img_cfg": float(cfg_scale),
+                    "distilled_guidance": float(distilled_guidance)
+                },
             },
-        },
-        "vae_tiling_params": get_vae_tiling_params(enable_upscale),
-        "output_format": "avi",
-        "output_compression": 100,
-    }
-
-    if "audio" not in payload["prompt"].lower():
-        payload["prompt"] = f"{payload['prompt']}, high quality clear audio"
-
-    if enable_upscale:
-        upscaler_path, upscaler_name = get_upscaler_info()
-        if not os.path.exists(upscaler_path):
-            raise gr.Error(f"Upscaling is enabled, but the upscaler model is missing:\n{upscaler_path}\n\nRun download step first.")
-
-        payload["hires"] = {
-            "enabled": True,
-            "upscaler": upscaler_name,
-            "scale": 2.0,
-            "steps": 10,
-            "denoising_strength": 0.7,
+            "vae_tiling_params": get_vae_tiling_params(enable_vae_tiling),
+            "output_format": "avi",
+            "output_compression": 100,
         }
 
-    if input_image is not None and os.path.exists(input_image):
-        with open(input_image, "rb") as img_file:
-            img_base64 = base64.b64encode(img_file.read()).decode("utf-8")
-        image_payload = f"data:image/png;base64,{img_base64}"
-        payload["init_image"] = image_payload
-        payload["input_image"] = image_payload
+        if "audio" not in payload["prompt"].lower():
+            payload["prompt"] = f"{payload['prompt']}, high quality clear audio"
 
-    try:
-        r = requests.post(f"{SERVER_URL}/sdcpp/v1/vid_gen", json=payload, timeout=30)
-        r.raise_for_status()
-        job_id = r.json()["id"]
-        status_timeouts = 0
+        if enable_upscale:
+            upscaler_path, upscaler_name = get_upscaler_info()
+            if not os.path.exists(upscaler_path):
+                raise gr.Error(f"Upscaling is enabled, but the upscaler model is missing:\n{upscaler_path}\n\nRun download step first.")
 
-        while True:
-            try:
-                status_res = requests.get(f"{SERVER_URL}/sdcpp/v1/jobs/{job_id}", timeout=120).json()
-                status_timeouts = 0
-            except ReadTimeout:
-                status_timeouts += 1
-                if status_timeouts >= 3:
-                    raise gr.Error(
-                        "The generation server is not responding to status checks.\n\n"
-                        "This usually means the backend is stuck in a long CUDA operation or hit a CUDA error.\n\n"
-                        f"Recent logs:\n{get_live_logs()}"
-                    )
-                time.sleep(8)
-                continue
+            payload["hires"] = {
+                "enabled": True,
+                "upscaler": upscaler_name,
+                "scale": 2.0,
+                "steps": 10,
+                "denoising_strength": 0.7,
+            }
 
-            status = status_res.get("status", "unknown")
+        if input_image is not None and os.path.exists(input_image):
+            with open(input_image, "rb") as img_file:
+                img_base64 = base64.b64encode(img_file.read()).decode("utf-8")
+            image_payload = f"data:image/png;base64,{img_base64}"
+            payload["init_image"] = image_payload
+            payload["input_image"] = image_payload
 
-            if status == "completed":
-                video_bytes = base64.b64decode(status_res["result"]["b64_json"])
-                working_dir = get_working_dir()
-                os.makedirs(working_dir, exist_ok=True)
-                output_ext = payload["output_format"]
-                base_video_path = os.path.join(working_dir, f"gen_{job_id}.{output_ext}")
-                with open(base_video_path, "wb") as f:
-                    f.write(video_bytes)
-                return make_preview_video(base_video_path)
+        try:
+            r = requests.post(f"{SERVER_URL}/sdcpp/v1/vid_gen", json=payload, timeout=30)
+            r.raise_for_status()
+            job_id = r.json()["id"]
+            status_timeouts = 0
 
-            if status in ("failed", "cancelled"):
-                raise gr.Error(build_failure_message(status_res))
+            while True:
+                try:
+                    status_res = requests.get(f"{SERVER_URL}/sdcpp/v1/jobs/{job_id}", timeout=120).json()
+                    status_timeouts = 0
+                except ReadTimeout:
+                    status_timeouts += 1
+                    if status_timeouts >= 3:
+                        raise gr.Error(
+                            "The generation server is not responding to status checks.\n\n"
+                            "This usually means the backend is stuck in a long CUDA operation or hit a CUDA error.\n\n"
+                            f"Recent logs:\n{get_live_logs()}"
+                        )
+                    time.sleep(8)
+                    continue
 
-            time.sleep(4)
+                status = status_res.get("status", "unknown")
+
+                if status == "completed":
+                    video_bytes = base64.b64decode(status_res["result"]["b64_json"])
+                    working_dir = get_working_dir()
+                    os.makedirs(working_dir, exist_ok=True)
+                    output_ext = payload["output_format"]
+                    base_video_path = os.path.join(working_dir, f"gen_{job_id}.{output_ext}")
+                    with open(base_video_path, "wb") as f:
+                        f.write(video_bytes)
+                    return make_preview_video(base_video_path)
+
+                if status in ("failed", "cancelled"):
+                    raise gr.Error(build_failure_message(status_res))
+
+                time.sleep(4)
 
     except gr.Error:
         raise
@@ -363,10 +439,11 @@ def build_app():
                 steps = gr.Slider(minimum=4, maximum=30, value=default_steps, step=1, label="Sampling Steps (LTX 2.3 Distilled Sweet Spot: 8-12)")
 
                 with gr.Accordion("Advanced Generation Settings (Fine-Tuning)", open=False):
-                    cfg_scale = gr.Slider(minimum=1.0, maximum=10.0, value=3.0, step=0.1, label="CFG Scale (txt_cfg / img_cfg)")
+                    cfg_scale = gr.Slider(minimum=1.0, maximum=10.0, value=6.0, step=0.1, label="CFG Scale (txt_cfg / img_cfg)")
                     distilled_guidance = gr.Slider(minimum=1.0, maximum=10.0, value=3.5, step=0.1, label="Distilled Guidance Scale")
-                    scheduler = gr.Dropdown(choices=["discrete", "ltx2"], value="ltx2", label="Inference Scheduler")
-                    flow_shift = gr.Slider(minimum=1.0, maximum=5.0, value=2.37, step=0.01, label="Flow Shift Parameter")
+                    scheduler = gr.Dropdown(choices=["default", "discrete", "ltx2"], value="default", label="Inference Scheduler")
+                    flow_shift = gr.Slider(minimum=0.0, maximum=5.0, value=0.0, step=0.01, label="Flow Shift Parameter (0.0 = Auto-calculate based on scheduler)")
+                    enable_vae_tiling = gr.Checkbox(label="Enable VAE Tiling (Disable for A100/A10G to get maximum quality without seams)", value=False if is_lightning_studio() else True)
 
                 enable_upscale = gr.Checkbox(label="Enable Native Hi-Res Upscaling Pass", value=False)
                 input_image = gr.Image(label="Input Image (For Image-to-Video)", type="filepath")
@@ -388,7 +465,7 @@ def build_app():
             inputs=[
                 prompt, neg_prompt, steps, resolution_preset, use_custom_resolution,
                 custom_width, custom_height, duration_seconds, input_image, enable_upscale,
-                cfg_scale, distilled_guidance, scheduler, flow_shift
+                cfg_scale, distilled_guidance, scheduler, flow_shift, enable_vae_tiling
             ],
             outputs=output_video,
         ).then(fn=scan_history, outputs=history_gallery)
