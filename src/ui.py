@@ -400,10 +400,10 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
 
                 time.sleep(4)
 
-    except gr.Error:
-        raise
-    except Exception as e:
-        raise gr.Error(f"Could not communicate with the generation server.\n\n{type(e).__name__}: {e}\n\nRecent logs:\n{get_live_logs()}")
+        except gr.Error:
+            raise
+        except Exception as e:
+            raise gr.Error(f"Could not communicate with the generation server.\n\n{type(e).__name__}: {e}\n\nRecent logs:\n{get_live_logs()}")
 
 def build_app():
     """Constructs and returns the Gradio app blocks."""
