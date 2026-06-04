@@ -1,7 +1,17 @@
 import os
 import sys
+import subprocess
 import signal
 import time
+
+# Auto-install requirements if any are missing before importing local modules
+try:
+    import gradio
+    import requests
+except ImportError:
+    print("📥 Installing python requirements (gradio, requests)...")
+    req_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-r", req_path])
 
 # Ensure import paths resolve correctly
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
