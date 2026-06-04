@@ -4,6 +4,7 @@ import glob
 import time
 import json
 import base64
+import subprocess
 import requests
 import warnings
 import gradio as gr
@@ -51,6 +52,18 @@ def get_upscaler_info():
     return fallback, os.path.splitext(os.path.basename(fallback))[0]
 
 def get_vae_tiling_params(enable_upscale):
+    if is_lightning_studio():
+        return {
+            "enabled": True,
+            "temporal_tiling": True,
+            "tile_size_x": 8,
+            "tile_size_y": 8,
+            "target_overlap": 0.25,
+            "rel_size_x": 0.0,
+            "rel_size_y": 0.0,
+            "extra_tiling_args": "temporal_tile_frames=4,temporal_tile_overlap=1",
+        }
+
     if enable_upscale:
         return {
             "enabled": True,
@@ -64,13 +77,13 @@ def get_vae_tiling_params(enable_upscale):
         }
     return {
         "enabled": True,
-        "temporal_tiling": False,
-        "tile_size_x": 32,
-        "tile_size_y": 32,
-        "target_overlap": 0.5,
+        "temporal_tiling": True,
+        "tile_size_x": 16,
+        "tile_size_y": 16,
+        "target_overlap": 0.25,
         "rel_size_x": 0.0,
         "rel_size_y": 0.0,
-        "extra_tiling_args": "",
+        "extra_tiling_args": "temporal_tile_frames=4,temporal_tile_overlap=1",
     }
 
 def get_live_logs():
@@ -84,9 +97,47 @@ def get_live_logs():
 def scan_history():
     """Scans the working directory for generated video outputs."""
     working_dir = get_working_dir()
-    video_files = glob.glob(os.path.join(working_dir, "gen_*.webm")) + glob.glob(os.path.join(working_dir, "gen_*.avi"))
+    video_files = (
+        glob.glob(os.path.join(working_dir, "gen_*.webm"))
+        + glob.glob(os.path.join(working_dir, "gen_*.avi"))
+        + glob.glob(os.path.join(working_dir, "gen_*.mp4"))
+    )
     video_files.sort(key=os.path.getmtime, reverse=True)
     return video_files
+
+def make_preview_video(video_path):
+    """Returns a browser-friendly MP4 preview while preserving the original output."""
+    if not video_path.lower().endswith(".avi"):
+        return video_path
+
+    preview_path = os.path.splitext(video_path)[0] + ".mp4"
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                video_path,
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-movflags",
+                "+faststart",
+                preview_path,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        if os.path.exists(preview_path) and os.path.getsize(preview_path) > 0:
+            return preview_path
+    except Exception:
+        pass
+
+    return video_path
 
 def build_failure_message(status_res):
     """Turns the server job response and recent logs into a beginner-readable UI message."""
@@ -215,13 +266,15 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
                 base_video_path = os.path.join(working_dir, f"gen_{job_id}.{output_ext}")
                 with open(base_video_path, "wb") as f:
                     f.write(video_bytes)
-                return base_video_path
+                return make_preview_video(base_video_path)
 
             if status in ("failed", "cancelled"):
                 raise gr.Error(build_failure_message(status_res))
 
             time.sleep(4)
 
+    except gr.Error:
+        raise
     except Exception as e:
         raise gr.Error(f"Could not communicate with the generation server.\n\n{type(e).__name__}: {e}\n\nRecent logs:\n{get_live_logs()}")
 
