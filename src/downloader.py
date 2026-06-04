@@ -30,7 +30,7 @@ MODEL_PRESETS = {
     },
     "LTX-Video-2.3-FP8": {
         "diffusion_models": [
-            "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/diffusion_models/ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors"
+            "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/distilled-1.1/ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf"
         ],
         "text_encoders": [
             "https://huggingface.co/GitMylo/LTX-2-comfy_gemma_fp8_e4m3fn/resolve/main/gemma_3_12B_it_fp8_e4m3fn.safetensors",
@@ -241,8 +241,8 @@ def clean_filenames(preset="LTX-Video-2.3-Q3", models_base="/tmp/models"):
     elif preset == "LTX-Video-2.3-FP8":
         # 1. Transformer / UNet Model Mapping
         dit_files = glob.glob(os.path.join(models_base, "diffusion_models/*"))
-        if dit_files and not dit_files[0].endswith(".safetensors"):
-            os.rename(dit_files[0], os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors"))
+        if dit_files and not dit_files[0].endswith(".gguf"):
+            os.rename(dit_files[0], os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1-Q5_K_M.gguf"))
             print("Mapped LTX-Video FP8 Transformer model name.")
 
         # 2. Text Encoder & Connectors Sorting
