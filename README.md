@@ -21,7 +21,7 @@ This studio is designed to be a unified, future-proof suite for running generati
   - High-speed inference (under 2 seconds per image) using persistent server RAM configurations.
   - Custom resolution presets and LoRA support.
 - **`[x]` Lightning.ai High-Quality Studio** (Current Release)
-  - High-quality FP8/Q8 model preset (`LTX-Video-2.3-FP8`) with CPU offload enabled by default for 24GB GPUs such as L4.
+  - High-quality stable-diffusion.cpp GGUF preset (`LTX-Video-2.3-FP8`) with Q8 diffusion/text models and CPU offload enabled by default for 24GB GPUs such as L4.
   - Persistent model caching across server restarts.
   - One-click launch command via `run_lightning.py`.
 - **`[ ]` More Models & Features Coming Soon!**

@@ -105,20 +105,20 @@ def start_server(
             server_cmd += ["--audio-vae", os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors")]
 
     elif preset == "LTX-Video-2.3-FP8":
-        upscaler_model = os.path.join(models_base, "latent_upscale_models/ltx-2-spatial-upscaler-x2-1.0.safetensors")
+        upscaler_model = os.path.join(models_base, "latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors")
         upscaler_dir = os.path.dirname(upscaler_model)
         
         required_paths = [
             bin_path,
             os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1-Q8_0.gguf"),
-            os.path.join(models_base, "vae/LTX23_video_vae_bf16.safetensors"),
-            os.path.join(models_base, "text_encoders/gemma_3_12B_it_fp8_scaled.safetensors"),
+            os.path.join(models_base, "vae/ltx-2.3-22b-distilled_video_vae.safetensors"),
+            os.path.join(models_base, "text_encoders/gemma-3-12b-it-Q8_0.gguf"),
             os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"),
             upscaler_model,
         ]
         
         if load_audio_vae:
-            required_paths.append(os.path.join(models_base, "vae/LTX23_audio_vae_bf16.safetensors"))
+            required_paths.append(os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors"))
             
         missing = [p for p in required_paths if not os.path.exists(p)]
         if missing:
@@ -134,8 +134,8 @@ def start_server(
             "--listen-port", str(port),
             "--threads", str(threads),
             "--diffusion-model", os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1-Q8_0.gguf"),
-            "--vae", os.path.join(models_base, "vae/LTX23_video_vae_bf16.safetensors"),
-            "--llm", os.path.join(models_base, "text_encoders/gemma_3_12B_it_fp8_scaled.safetensors"),
+            "--vae", os.path.join(models_base, "vae/ltx-2.3-22b-distilled_video_vae.safetensors"),
+            "--llm", os.path.join(models_base, "text_encoders/gemma-3-12b-it-Q8_0.gguf"),
             "--embeddings-connectors", os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"),
             "--hires-upscalers-dir", upscaler_dir,
             "--diffusion-fa",
@@ -145,7 +145,7 @@ def start_server(
         if offload_to_cpu:
             server_cmd += ["--offload-to-cpu"]
         if load_audio_vae:
-            server_cmd += ["--audio-vae", os.path.join(models_base, "vae/LTX23_audio_vae_bf16.safetensors")]
+            server_cmd += ["--audio-vae", os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors")]
 
     elif preset == "Z-Image-Turbo-Q4":
         lora_dir = os.path.join(models_base, "loras")
