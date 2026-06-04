@@ -186,6 +186,18 @@ def download_models(preset="LTX-Video-2.3-Q3", models_base="/tmp/models"):
             filename = url.split("/")[-1]
             dest_file = os.path.join(cat_dir, filename)
             
+            # Self-healing: If a GGUF file is actually a safetensors file (due to previous renaming bugs)
+            if dest_file.endswith(".gguf") and os.path.exists(dest_file):
+                try:
+                    with open(dest_file, "rb") as f:
+                        header = f.read(4)
+                        # GGUF files start with "GGUF" magic bytes (0x47, 0x47, 0x55, 0x46)
+                        if header != b"GGUF":
+                            print(f"⚠️ Warning: Detected corrupted/mismatched GGUF file format for {filename}. Deleting and re-downloading...")
+                            os.remove(dest_file)
+                except Exception as e:
+                    print(f"Error checking file header: {e}")
+
             # Skip if file already exists and is fully downloaded (not a small temp file)
             if os.path.exists(dest_file) and os.path.getsize(dest_file) > 10 * 1024 * 1024:
                 print(f"✅ {filename} already exists. Skipping download.")
@@ -241,7 +253,7 @@ def clean_filenames(preset="LTX-Video-2.3-Q3", models_base="/tmp/models"):
     elif preset == "LTX-Video-2.3-FP8":
         # 1. Transformer / UNet Model Mapping
         dit_files = glob.glob(os.path.join(models_base, "diffusion_models/*"))
-        if dit_files and not dit_files[0].endswith(".gguf"):
+        if dit_files and not dit_files[0].endswith(".gguf") and not dit_files[0].endswith(".safetensors"):
             os.rename(dit_files[0], os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1-Q8_0.gguf"))
             print("Mapped LTX-Video FP8 Transformer model name.")
 
