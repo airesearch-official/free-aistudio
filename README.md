@@ -20,9 +20,9 @@ This studio is designed to be a unified, future-proof suite for running generati
   - Ultra-fast image generation utilizing GGUF models.
   - High-speed inference (under 2 seconds per image) using persistent server RAM configurations.
   - Custom resolution presets and LoRA support.
-- **`[x]` Lightning.ai High-Quality Studio** (Current Release)
-  - High-quality stable-diffusion.cpp GGUF preset (`LTX-Video-2.3-FP8`) with Q8 diffusion and a smaller GGUF text encoder for GPU headroom.
-  - Persistent model caching across server restarts.
+- **`[x]` Lightning.ai High-Quality Studio (Experimental)** (Current Release)
+  - Run video generation directly via CLI execution (`sd-cli`) under the hood to bypass server overhead.
+  - Optimized GGUF model paths (`LTX-Video-2.3-FP8`) with Q8 diffusion.
   - One-click launch command via `run_lightning.py`.
 - **`[ ]` More Models & Features Coming Soon!**
   - New generative features and community-requested presets will be added as they arrive.
@@ -68,15 +68,14 @@ Save one of the user-facing notebooks from this repository to your local machine
 ### Step 3: Run the Cells
 Once imported, you only need to run the pre-made cells in sequence. The notebook will automatically sync the repository code, download the pre-built C++ server binary and optimized model weights, launch the background API inference server, and display your Gradio Web UI link.
 
-## ⚡ Quick Start: How to Run on Lightning.ai
+## ⚡ Quick Start: How to Run on Lightning.ai (Experimental)
 
-To run the high-quality FP8 model studio, you need a CUDA-enabled environment. Lightning.ai Studios provide an easy way to configure a GPU instance and clone this project.
+To run the experimental high-quality FP8 model studio, you need a CUDA-enabled environment.
 
 ### Step 1: Create a Studio and Attach a GPU
 1. Go to [Lightning.ai](https://lightning.ai/) and log in (or create a free account).
 2. Click **Create Studio** in your dashboard.
-3. Once the Studio is created, check the hardware environment in the top-right corner. It defaults to a CPU environment.
-4. Click on the hardware picker and switch to the **L4 GPU** (the recommended cheapest GPU tier with 24GB of VRAM). 
+3. Switch the hardware to an **L4 GPU** (or any CUDA-enabled GPU).
    > [!IMPORTANT]
    > Do **NOT** run this in a CPU-only environment, or the engine will fail to initialize.
 
@@ -92,45 +91,12 @@ To run the high-quality FP8 model studio, you need a CUDA-enabled environment. L
    ```
 
 ### Step 3: Run the Studio
-Choose one of the two easy methods to start the UI:
-
-#### Method A: Using the Jupyter Notebook (Visual Setup)
-1. In the file explorer sidebar on the left of your Studio, open the `free-aistudio` folder, then open the `notebooks` folder.
-2. Double-click **`lightning-video.ipynb`** to open it.
-3. Run the cells in sequence by clicking the **Run** button or pressing `Shift + Enter`. It will set up the binary, fetch the unquantized FP8 models persistently, and launch the UI.
-
-#### Method B: Using the One-Click Script (Terminal Setup)
-1. In your open terminal (inside the `free-aistudio` directory), run:
+1. Run the script:
    ```bash
    python run_lightning.py
    ```
-2. The script will download the prebuilt Lightning CUDA server from the `v1.0.0` GitHub release (`sd-cpp-linux-cuda-a100-colab-build.zip`), download the GGUF Q8 model weights persistently, launch the background C++ server, and open the Gradio Web UI with a public `*.gradio.live` link.
-3. When you are done generating, simply press **`Ctrl + C`** in your terminal to safely stop the background processes and free up GPU memory.
-
-By default, the Lightning launcher auto-detects GPU memory. A100-class GPUs run on GPU; smaller 24GB GPUs such as L4 use CPU offload. You can force GPU mode:
-```bash
-FREE_AISTUDIO_LIGHTNING_FULL_GPU=1 python run_lightning.py
-```
-
-You can force CPU offload:
-```bash
-FREE_AISTUDIO_LIGHTNING_CPU_OFFLOAD=1 python run_lightning.py
-```
-
-The Lightning launcher disables diffusion flash-attention by default because some CUDA kernels can fail during video generation with the Q8 GGUF stack. To compare speed/stability on a larger GPU, opt back in:
-```bash
-FREE_AISTUDIO_LIGHTNING_DIFFUSION_FA=1 python run_lightning.py
-```
-
-The Lightning launcher caches the release binary. To force a fresh binary download:
-```bash
-FREE_AISTUDIO_LIGHTNING_FORCE_BINARY_DOWNLOAD=1 python run_lightning.py
-```
-
-Source build remains available as a fallback. A100 uses CUDA architecture 80:
-```bash
-FREE_AISTUDIO_LIGHTNING_BUILD_FROM_SOURCE=1 FREE_AISTUDIO_CUDA_ARCH=80 FREE_AISTUDIO_LIGHTNING_FORCE_REBUILD=1 python run_lightning.py
-```
+2. The script will download the prebuilt binary, download the models persistently, and launch the Gradio Web UI with a public `*.gradio.live` link.
+3. The UI will execute video generation tasks on-demand via the `sd-cli` binary.
 
 ---
 
