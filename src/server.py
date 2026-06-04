@@ -3,6 +3,51 @@ import subprocess
 import time
 import sys
 
+def find_cuda_library_paths():
+    """Gathers all potential CUDA and Nvidia library paths in the environment."""
+    import glob
+    paths = []
+    
+    # 1. Active Conda/Python environment paths
+    conda_prefix = os.environ.get("CONDA_PREFIX", sys.prefix)
+    if conda_prefix:
+        paths.append(os.path.join(conda_prefix, "lib"))
+        
+    # 2. Nvidia Pip packages in site-packages (where pip installs CUDA runtime/cublas)
+    for sp in sys.path:
+        if "site-packages" in sp:
+            # Match directories like site-packages/nvidia/cuda_runtime/lib, site-packages/nvidia/cublas/lib, etc.
+            pattern = os.path.join(sp, "nvidia", "*", "lib")
+            for lib_dir in glob.glob(pattern):
+                if os.path.isdir(lib_dir):
+                    paths.append(lib_dir)
+            # Also search for torch/lib which contains PyTorch's internal CUDA libraries
+            torch_lib = os.path.join(sp, "torch", "lib")
+            if os.path.isdir(torch_lib):
+                paths.append(torch_lib)
+                    
+    # 3. Standard system CUDA paths
+    system_paths = [
+        "/usr/local/cuda/lib64",
+        "/usr/local/cuda-12/lib64",
+        "/usr/lib/x86_64-linux-gnu"
+    ]
+    paths.extend(system_paths)
+    
+    # 4. Glob search under /usr/local for any other CUDA installations
+    for path in glob.glob("/usr/local/cuda-12.*/lib64"):
+        paths.append(path)
+    for path in glob.glob("/usr/local/cuda-*/lib64"):
+        paths.append(path)
+        
+    # Filter only existing directories and remove duplicates
+    unique_paths = []
+    for p in paths:
+        if p and os.path.isdir(p) and p not in unique_paths:
+            unique_paths.append(p)
+            
+    return unique_paths
+
 def start_server(
     preset="LTX-Video-2.3-Q3",
     bin_path="/tmp/sd_bin/bin/sd-server",
@@ -135,23 +180,20 @@ def start_server(
     env = os.environ.copy()
     
     # Dynamically inject CUDA & Conda library paths for stable-diffusion.cpp runtime dependency resolution
-    conda_prefix = env.get("CONDA_PREFIX", sys.prefix)
-    conda_lib = os.path.join(conda_prefix, "lib")
+    valid_paths = find_cuda_library_paths()
     
-    cuda_paths = [
-        conda_lib,
-        "/usr/local/cuda/lib64",
-        "/usr/local/cuda-12/lib64",
-        "/usr/lib/x86_64-linux-gnu"
-    ]
-    
-    # Add glob matches for cuda-12.*
-    import glob
-    for path in glob.glob("/usr/local/cuda-12.*/lib64"):
-        cuda_paths.append(path)
+    # Search for libcudart.so.12 in the gathered paths and print debug information
+    found_at = []
+    for p in valid_paths:
+        if os.path.exists(os.path.join(p, "libcudart.so.12")):
+            found_at.append(p)
+            
+    if found_at:
+        print(f"🎯 CUDA Runtime libcudart.so.12 found in: {found_at}")
+    else:
+        print("⚠️ Warning: libcudart.so.12 was not found in any checked directory! Inference may fail if CUDA is not globally installed.")
+        print(f"Searched directories: {valid_paths}")
         
-    valid_paths = [p for p in cuda_paths if os.path.exists(p)]
-    
     existing_ld = env.get("LD_LIBRARY_PATH", "")
     if existing_ld:
         env["LD_LIBRARY_PATH"] = ":".join(valid_paths) + ":" + existing_ld
