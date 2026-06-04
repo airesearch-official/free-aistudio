@@ -17,6 +17,14 @@ if os.path.exists("/teamspace/studios/this_studio"):
 else:
     LOG_PATH = "/kaggle/working/server.log"
 
+def get_working_dir():
+    """Returns the environment-specific directory for generated outputs."""
+    if os.path.exists("/teamspace/studios/this_studio"):
+        return "/teamspace/studios/this_studio/outputs"
+    if os.path.exists("/kaggle/working"):
+        return "/kaggle/working"
+    return "/tmp/free-aistudio"
+
 def get_models_base():
     """Returns the base models directory depending on the environment."""
     if os.path.exists("/teamspace/studios/this_studio"):
@@ -71,7 +79,8 @@ def get_live_logs():
 
 def scan_history():
     """Scans the working directory for generated video outputs."""
-    video_files = glob.glob("/kaggle/working/gen_*.webm") + glob.glob("/kaggle/working/gen_*.avi")
+    working_dir = get_working_dir()
+    video_files = glob.glob(os.path.join(working_dir, "gen_*.webm")) + glob.glob(os.path.join(working_dir, "gen_*.avi"))
     video_files.sort(key=os.path.getmtime, reverse=True)
     return video_files
 
@@ -182,7 +191,9 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
 
             if status == "completed":
                 video_bytes = base64.b64decode(status_res["result"]["b64_json"])
-                base_video_path = f"/kaggle/working/gen_{job_id}.avi"
+                working_dir = get_working_dir()
+                os.makedirs(working_dir, exist_ok=True)
+                base_video_path = os.path.join(working_dir, f"gen_{job_id}.avi")
                 with open(base_video_path, "wb") as f:
                     f.write(video_bytes)
                 return base_video_path
@@ -315,7 +326,8 @@ def apply_preset(preset_label):
 
 def scan_image_history():
     """Scans the working directory for generated image outputs."""
-    image_files = glob.glob("/kaggle/working/gen_*.png")
+    working_dir = get_working_dir()
+    image_files = glob.glob(os.path.join(working_dir, "gen_*.png"))
     image_files.sort(key=os.path.getmtime, reverse=True)
     return image_files
 
@@ -360,7 +372,9 @@ def handle_image_generation(prompt, width, height, steps, seed, cfg_scale, selec
 
             if status == "completed":
                 image_bytes = base64.b64decode(status_res["result"]["images"][0]["b64_json"])
-                base_image_path = f"/kaggle/working/gen_{job_id}.png"
+                working_dir = get_working_dir()
+                os.makedirs(working_dir, exist_ok=True)
+                base_image_path = os.path.join(working_dir, f"gen_{job_id}.png")
                 with open(base_image_path, "wb") as f:
                     f.write(image_bytes)
                 return base_image_path

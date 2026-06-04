@@ -21,7 +21,7 @@ This studio is designed to be a unified, future-proof suite for running generati
   - High-speed inference (under 2 seconds per image) using persistent server RAM configurations.
   - Custom resolution presets and LoRA support.
 - **`[x]` Lightning.ai High-Quality Studio** (Current Release)
-  - High-quality FP8 models (`LTX-Video-2.3-FP8`) running entirely on GPU VRAM (no CPU offload).
+  - High-quality FP8/Q8 model preset (`LTX-Video-2.3-FP8`) with CPU offload enabled by default for 24GB GPUs such as L4.
   - Persistent model caching across server restarts.
   - One-click launch command via `run_lightning.py`.
 - **`[ ]` More Models & Features Coming Soon!**
@@ -106,6 +106,11 @@ Choose one of the two easy methods to start the UI:
    ```
 2. The script will automatically restore the execution binary, download the FP8 model weights persistently, launch the background C++ server, and open the Gradio Web UI with a public `*.gradio.live` link.
 3. When you are done generating, simply press **`Ctrl + C`** in your terminal to safely stop the background processes and free up GPU memory.
+
+By default, the Lightning launcher enables CPU offload so the high-quality preset can start on 24GB GPUs such as L4. On larger VRAM machines, you can opt into full-GPU loading:
+```bash
+FREE_AISTUDIO_LIGHTNING_FULL_GPU=1 python run_lightning.py
+```
 
 ---
 

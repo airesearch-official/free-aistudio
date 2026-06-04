@@ -55,7 +55,10 @@ def start_server(
     load_audio_vae=True,
     log_path="/kaggle/working/server.log",
     port=1234,
-    threads=4
+    threads=4,
+    offload_to_cpu=False,
+    wait_timeout=120,
+    fail_on_timeout=False
 ):
     """Spawns the stable-diffusion.cpp API server in the background and saves logs."""
     
@@ -139,6 +142,8 @@ def start_server(
             "--vae-tiling",
             "-v",
         ]
+        if offload_to_cpu:
+            server_cmd += ["--offload-to-cpu"]
         if load_audio_vae:
             server_cmd += ["--audio-vae", os.path.join(models_base, "vae/LTX23_audio_vae_bf16.safetensors")]
 
@@ -212,7 +217,15 @@ def start_server(
     
     print(f"⏱️ Waiting for API server to become responsive on port {port}...")
     start_time = time.time()
-    while time.time() - start_time < 120:
+    while time.time() - start_time < wait_timeout:
+        if process.poll() is not None:
+            log_file.close()
+            logs = tail_logs(log_path, line_count=40)
+            raise RuntimeError(
+                "The stable-diffusion.cpp server stopped during startup.\n"
+                f"Exit code: {process.returncode}\n"
+                f"Recent logs:\n{logs}"
+            )
         try:
             import urllib.request
             # Check if capabilities endpoint is active (indicates model is fully loaded and listening)
@@ -223,6 +236,12 @@ def start_server(
         except Exception:
             time.sleep(2)
     else:
+        if fail_on_timeout:
+            log_file.close()
+            raise TimeoutError(
+                "Timeout waiting for server response.\n"
+                f"Recent logs:\n{tail_logs(log_path, line_count=40)}"
+            )
         print("⚠️ Warning: Timeout waiting for server response. Proceeding anyway...")
         
     print(f"API Server active checks loaded. Preset: {preset}")

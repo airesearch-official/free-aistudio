@@ -95,6 +95,44 @@ def restore_binary(repo=DEFAULT_REPO, tag=DEFAULT_TAG, target_dir="/tmp/sd_bin")
     except Exception as e:
         print(f"❌ Error restoring binary: {e}")
         print("Please check if the GitHub Release tag exists and contains the required file.")
+        raise
+
+def remote_file_size(url):
+    """Returns the remote file size when the host provides it."""
+    try:
+        req = urllib.request.Request(
+            url,
+            method="HEAD",
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as response:
+            size = response.headers.get("Content-Length")
+            return int(size) if size else None
+    except Exception as e:
+        print(f"Warning: could not verify remote size for {url}: {e}")
+        return None
+
+def is_download_complete(url, dest_file):
+    """Checks whether an existing model file is likely complete."""
+    if not os.path.exists(dest_file):
+        return False
+
+    local_size = os.path.getsize(dest_file)
+    if local_size <= 10 * 1024 * 1024:
+        return False
+
+    expected_size = remote_file_size(url)
+    if expected_size is None:
+        return True
+
+    if local_size == expected_size:
+        return True
+
+    print(
+        f"Warning: {os.path.basename(dest_file)} has size {local_size} bytes, "
+        f"expected {expected_size}. Re-downloading."
+    )
+    return False
 
 def python_download(url, dest_dir):
     """Fallback python downloader when aria2 is not available."""
@@ -199,11 +237,15 @@ def download_models(preset="LTX-Video-2.3-Q3", models_base="/tmp/models"):
                     print(f"Error checking file header: {e}")
 
             # Skip if file already exists and is fully downloaded (not a small temp file)
-            if os.path.exists(dest_file) and os.path.getsize(dest_file) > 10 * 1024 * 1024:
+            if is_download_complete(url, dest_file):
                 print(f"✅ {filename} already exists. Skipping download.")
                 continue
                 
             print(f"→ Downloading {filename} to {cat_dir}...")
+            if os.path.exists(dest_file):
+                print(f"Warning: removing incomplete download before retrying: {dest_file}")
+                os.remove(dest_file)
+
             if use_aria2:
                 cmd = f'aria2c -x 16 -s 16 -k 1M -d "{cat_dir}" "{url}"'
                 res = subprocess.run(cmd, shell=True)
@@ -307,4 +349,3 @@ def clean_filenames(preset="LTX-Video-2.3-Q3", models_base="/tmp/models"):
         if vae_files and not vae_files[0].endswith(".safetensors"):
             os.rename(vae_files[0], os.path.join(models_base, "vae/ae.safetensors"))
             print("Mapped Flux VAE name.")
-
