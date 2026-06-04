@@ -157,7 +157,7 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
             "guidance": {"txt_cfg": 5.5, "img_cfg": 5.5, "distilled_guidance": 3.5},
         },
         "vae_tiling_params": get_vae_tiling_params(enable_upscale),
-        "output_format": "webm" if is_lightning_studio() else "avi",
+        "output_format": "avi",
         "output_compression": 100,
     }
 

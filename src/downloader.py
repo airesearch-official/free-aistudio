@@ -5,11 +5,13 @@ import tarfile
 import subprocess
 import glob
 import json
+import zipfile
 
 # Configuration for GitHub Releases binary
 DEFAULT_REPO = "airesearch-official/free-aistudio"
 DEFAULT_TAG = "v1.0.0"
 BINARY_FILENAME = "sd_cpp_cuda_built.tar.gz"
+LIGHTNING_BINARY_FILENAME = "sd-cpp-linux-cuda-a100-colab-build.zip"
 LIGHTNING_SDC_REPO = "https://github.com/leejet/stable-diffusion.cpp.git"
 LIGHTNING_SDC_TAG = "master-672-1f9ee88"
 
@@ -118,6 +120,81 @@ def restore_binary(repo=DEFAULT_REPO, tag=DEFAULT_TAG, target_dir="/tmp/sd_bin")
         print(f"❌ Error restoring binary: {e}")
         print("Please check if the GitHub Release tag exists and contains the required file.")
         raise
+
+def restore_lightning_binary(
+    repo=DEFAULT_REPO,
+    tag=DEFAULT_TAG,
+    target_dir="/teamspace/studios/this_studio/sd_bin",
+    filename=LIGHTNING_BINARY_FILENAME,
+    force=False,
+):
+    """Downloads the Lightning CUDA zip release and installs binaries into target_dir/bin."""
+    url = f"https://github.com/{repo}/releases/download/{tag}/{filename}"
+    bin_dir = os.path.join(target_dir, "bin")
+    server_bin = os.path.join(bin_dir, "sd-server")
+    build_info_path = os.path.join(target_dir, "build_info.json")
+
+    if os.path.exists(server_bin) and os.path.exists(build_info_path) and not force:
+        try:
+            with open(build_info_path, "r") as f:
+                build_info = json.load(f)
+            if (
+                build_info.get("type") == "release-zip"
+                and build_info.get("repo") == repo
+                and build_info.get("tag") == tag
+                and build_info.get("filename") == filename
+            ):
+                print(f"Using cached Lightning release binary: {filename}")
+                return
+        except Exception:
+            pass
+
+    os.makedirs(target_dir, exist_ok=True)
+    zip_path = os.path.join(target_dir, filename)
+    extract_dir = os.path.join(target_dir, "_lightning_release_extract")
+
+    print(f"Downloading Lightning CUDA binary from: {url}...")
+    urllib.request.urlretrieve(url, zip_path)
+
+    if os.path.exists(extract_dir):
+        shutil.rmtree(extract_dir)
+    os.makedirs(extract_dir, exist_ok=True)
+
+    print("Unpacking Lightning CUDA binary zip...")
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        for member in zf.infolist():
+            member_path = os.path.normpath(member.filename)
+            if member_path.startswith("..") or os.path.isabs(member_path):
+                raise ValueError(f"Unsafe path in zip file: {member.filename}")
+            zf.extract(member, extract_dir)
+
+    candidates = glob.glob(os.path.join(extract_dir, "**", "sd-server"), recursive=True)
+    candidates = [p for p in candidates if os.path.isfile(p)]
+    if not candidates:
+        raise FileNotFoundError(f"sd-server was not found inside {filename}")
+
+    built_server = candidates[0]
+    built_bin_dir = os.path.dirname(built_server)
+    os.makedirs(bin_dir, exist_ok=True)
+    for item in glob.glob(os.path.join(built_bin_dir, "*")):
+        if os.path.isfile(item):
+            dest = os.path.join(bin_dir, os.path.basename(item))
+            shutil.copy2(item, dest)
+            os.chmod(dest, 0o755)
+
+    with open(build_info_path, "w") as f:
+        json.dump(
+            {
+                "type": "release-zip",
+                "repo": repo,
+                "tag": tag,
+                "filename": filename,
+            },
+            f,
+            indent=2,
+        )
+
+    print(f"Lightning CUDA release binary restored: {server_bin}")
 
 def build_binary_from_source(
     target_dir="/teamspace/studios/this_studio/sd_bin",

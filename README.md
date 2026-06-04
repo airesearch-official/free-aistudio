@@ -104,7 +104,7 @@ Choose one of the two easy methods to start the UI:
    ```bash
    python run_lightning.py
    ```
-2. The script will build the latest tested upstream stable-diffusion.cpp CUDA server for Lightning, download the GGUF Q8 model weights persistently, launch the background C++ server, and open the Gradio Web UI with a public `*.gradio.live` link.
+2. The script will download the prebuilt Lightning CUDA server from the `v1.0.0` GitHub release (`sd-cpp-linux-cuda-a100-colab-build.zip`), download the GGUF Q8 model weights persistently, launch the background C++ server, and open the Gradio Web UI with a public `*.gradio.live` link.
 3. When you are done generating, simply press **`Ctrl + C`** in your terminal to safely stop the background processes and free up GPU memory.
 
 By default, the Lightning launcher auto-detects GPU memory. A100-class GPUs run on GPU; smaller 24GB GPUs such as L4 use CPU offload. You can force GPU mode:
@@ -122,19 +122,14 @@ The Lightning launcher disables diffusion flash-attention by default because som
 FREE_AISTUDIO_LIGHTNING_DIFFUSION_FA=1 python run_lightning.py
 ```
 
-The Lightning launcher caches its source-built CUDA engine. To rebuild against the pinned upstream stable-diffusion.cpp tag:
+The Lightning launcher caches the release binary. To force a fresh binary download:
 ```bash
-FREE_AISTUDIO_LIGHTNING_FORCE_REBUILD=1 python run_lightning.py
+FREE_AISTUDIO_LIGHTNING_FORCE_BINARY_DOWNLOAD=1 python run_lightning.py
 ```
 
-If CMake cannot detect the GPU architecture during configure, set it explicitly. A100 uses CUDA architecture 80:
+Source build remains available as a fallback. A100 uses CUDA architecture 80:
 ```bash
-FREE_AISTUDIO_CUDA_ARCH=80 FREE_AISTUDIO_LIGHTNING_FORCE_REBUILD=1 python run_lightning.py
-```
-
-To temporarily fall back to the older packaged binary:
-```bash
-FREE_AISTUDIO_LIGHTNING_USE_RELEASE_BINARY=1 python run_lightning.py
+FREE_AISTUDIO_LIGHTNING_BUILD_FROM_SOURCE=1 FREE_AISTUDIO_CUDA_ARCH=80 FREE_AISTUDIO_LIGHTNING_FORCE_REBUILD=1 python run_lightning.py
 ```
 
 ---
