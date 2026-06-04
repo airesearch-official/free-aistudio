@@ -107,15 +107,28 @@ def scan_history():
 
 def make_preview_video(video_path):
     """Returns a browser-friendly MP4 preview while preserving the original output."""
+    import shutil
     if not video_path.lower().endswith(".avi"):
         return video_path
 
     preview_path = os.path.splitext(video_path)[0] + ".mp4"
+    
+    # Locate ffmpeg executable
+    ffmpeg_cmd = "ffmpeg"
+    if shutil.which("ffmpeg") is None:
+        try:
+            import imageio_ffmpeg
+            ffmpeg_cmd = imageio_ffmpeg.get_ffmpeg_exe()
+            print(f"🎬 Found imageio-ffmpeg static binary: {ffmpeg_cmd}")
+        except ImportError:
+            print("⚠️ Warning: ffmpeg not found in PATH and imageio-ffmpeg is not installed. Video container conversion might fail.")
+            
+    print(f"🎬 Starting ffmpeg conversion using: {ffmpeg_cmd}")
     try:
         # 1. Attempt full conversion including audio stream encoding
-        subprocess.run(
+        res = subprocess.run(
             [
-                "ffmpeg",
+                ffmpeg_cmd,
                 "-y",
                 "-i",
                 video_path,
@@ -129,18 +142,24 @@ def make_preview_video(video_path):
                 "+faststart",
                 preview_path,
             ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
             check=True,
         )
         if os.path.exists(preview_path) and os.path.getsize(preview_path) > 0:
+            print("✅ Successfully encoded video preview with audio.")
             return preview_path
-    except Exception:
-        # 2. Fallback to video-only conversion if the file has no audio stream
+    except Exception as e:
+        print(f"⚠️ Pass 1 ffmpeg conversion failed. Error: {e}")
+        if hasattr(e, 'stderr') and e.stderr:
+            print(f"ffmpeg Pass 1 Stderr:\n{e.stderr}")
+            
+        # 2. Fallback to video-only conversion if the file has no audio stream or audio codec fails
         try:
-            subprocess.run(
+            print("🎬 Retrying ffmpeg conversion without audio (-an)...")
+            res2 = subprocess.run(
                 [
-                    "ffmpeg",
+                    ffmpeg_cmd,
                     "-y",
                     "-i",
                     video_path,
@@ -153,14 +172,17 @@ def make_preview_video(video_path):
                     "+faststart",
                     preview_path,
                 ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
                 check=True,
             )
             if os.path.exists(preview_path) and os.path.getsize(preview_path) > 0:
+                print("✅ Successfully encoded video preview (video-only).")
                 return preview_path
-        except Exception:
-            pass
+        except Exception as e2:
+            print(f"⚠️ Pass 2 ffmpeg conversion failed. Error: {e2}")
+            if hasattr(e2, 'stderr') and e2.stderr:
+                print(f"ffmpeg Pass 2 Stderr:\n{e2.stderr}")
 
     return video_path
 

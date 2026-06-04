@@ -112,9 +112,9 @@ def start_server(
         
         required_paths = [
             bin_path,
-            os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1-Q8_0.gguf"),
+            os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-Q8_0.gguf"),
             os.path.join(models_base, "vae/ltx-2.3-22b-distilled_video_vae.safetensors"),
-            os.path.join(models_base, "text_encoders/gemma-3-12b-it-UD-IQ2_XXS.gguf"),
+            os.path.join(models_base, "text_encoders/gemma-3-12b-it-Q6_K.gguf"),
             os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"),
             upscaler_model,
         ]
@@ -135,9 +135,9 @@ def start_server(
             "--listen-ip", "127.0.0.1",
             "--listen-port", str(port),
             "--threads", str(threads),
-            "--diffusion-model", os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1-Q8_0.gguf"),
+            "--diffusion-model", os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-Q8_0.gguf"),
             "--vae", os.path.join(models_base, "vae/ltx-2.3-22b-distilled_video_vae.safetensors"),
-            "--llm", os.path.join(models_base, "text_encoders/gemma-3-12b-it-UD-IQ2_XXS.gguf"),
+            "--llm", os.path.join(models_base, "text_encoders/gemma-3-12b-it-Q6_K.gguf"),
             "--embeddings-connectors", os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"),
             "--hires-upscalers-dir", upscaler_dir,
             "--vae-tiling",

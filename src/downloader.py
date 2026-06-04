@@ -1,4 +1,5 @@
 import os
+import sys
 import shutil
 import urllib.request
 import tarfile
@@ -6,6 +7,26 @@ import subprocess
 import glob
 import json
 import zipfile
+
+def safe_rename(src, dst):
+    """Safely renames a file only if the source and target are different paths."""
+    src_abs = os.path.abspath(src)
+    dst_abs = os.path.abspath(dst)
+    if src_abs == dst_abs:
+        return
+    print(f"Renaming {src_abs} to {dst_abs}...")
+    if os.path.exists(dst_abs):
+        try:
+            if os.path.isdir(dst_abs):
+                shutil.rmtree(dst_abs)
+            else:
+                os.remove(dst_abs)
+        except Exception as e:
+            print(f"Warning: Could not remove existing file/directory {dst_abs}: {e}")
+    try:
+        os.rename(src_abs, dst_abs)
+    except Exception as e:
+        print(f"Error: Failed to rename {src_abs} to {dst_abs}: {e}")
 
 # Configuration for GitHub Releases binary
 DEFAULT_REPO = "airesearch-official/free-aistudio"
@@ -55,10 +76,10 @@ MODEL_PRESETS = {
     },
     "LTX-Video-2.3-FP8": {
         "diffusion_models": [
-            "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/distilled-1.1/ltx-2.3-22b-distilled-1.1-Q8_0.gguf"
+            "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/distilled/ltx-2.3-22b-distilled-Q8_0.gguf"
         ],
         "text_encoders": [
-            "https://huggingface.co/unsloth/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-UD-IQ2_XXS.gguf",
+            "https://huggingface.co/unsloth/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q6_K.gguf",
             "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"
         ],
         "vae": [
@@ -375,12 +396,51 @@ def setup_aria2():
     if res.returncode != 0:
         print("⚠️ Failed to install aria2. Will automatically use Python fallback downloader.")
 
+def setup_ffmpeg():
+    """Installs ffmpeg using imageio-ffmpeg or apt-get if not already present."""
+    if shutil.which("ffmpeg") is not None:
+        print("✅ ffmpeg is already installed.")
+        return
+        
+    try:
+        import imageio_ffmpeg
+        print("✅ imageio-ffmpeg is already installed.")
+        return
+    except ImportError:
+        pass
+
+    print("📥 Installing imageio-ffmpeg static binary framework...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "imageio-ffmpeg>=0.4.9"])
+        print("✅ Finished installing imageio-ffmpeg.")
+        import imageio_ffmpeg
+        return
+    except Exception as e:
+        print(f"⚠️ Failed to pip install imageio-ffmpeg: {e}")
+        
+    # Fallback to apt-get
+    print("📥 Trying system apt-get install fallback...")
+    try:
+        is_root = (os.getuid() == 0)
+    except AttributeError:
+        is_root = True
+        
+    use_sudo = ""
+    if not is_root and shutil.which("sudo") is not None:
+        use_sudo = "sudo "
+        
+    cmd = f"{use_sudo}apt-get update -qq && {use_sudo}apt-get install -y -qq ffmpeg"
+    res = subprocess.run(cmd, shell=True)
+    if res.returncode != 0:
+        print("⚠️ Failed to install ffmpeg. Video previews might not show properly in the Gradio player.")
+
 def download_models(preset="LTX-Video-2.3-Q3", models_base="/tmp/models"):
     """Downloads weights for a selected preset using aria2c (or Python fallback)."""
     if preset not in MODEL_PRESETS:
         raise ValueError(f"Unknown preset '{preset}'. Available: {list(MODEL_PRESETS.keys())}")
         
     setup_aria2()
+    setup_ffmpeg()
     config = MODEL_PRESETS[preset]
     use_aria2 = shutil.which("aria2c") is not None
     
@@ -434,87 +494,87 @@ def clean_filenames(preset="LTX-Video-2.3-Q3", models_base="/tmp/models"):
         # 1. Main Base Model Mapping
         dit_files = glob.glob(os.path.join(models_base, "diffusion_models/*"))
         if dit_files and not dit_files[0].endswith(".gguf"):
-            os.rename(dit_files[0], os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1-Q3_K_M.gguf"))
+            safe_rename(dit_files[0], os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1-Q3_K_M.gguf"))
             print("Mapped LTX-Video DiT model name.")
 
         # 2. Text Encoder & Connectors Sorting
         te_files = sorted(glob.glob(os.path.join(models_base, "text_encoders/*")), key=os.path.getsize)
         if len(te_files) >= 2:
             if not te_files[0].endswith(".safetensors"):
-                os.rename(te_files[0], os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"))
+                safe_rename(te_files[0], os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"))
             if not te_files[1].endswith(".gguf"):
-                os.rename(te_files[1], os.path.join(models_base, "text_encoders/gemma-3-12b-it-UD-IQ2_XXS.gguf"))
+                safe_rename(te_files[1], os.path.join(models_base, "text_encoders/gemma-3-12b-it-UD-IQ2_XXS.gguf"))
             print("Mapped LTX-Video Text Encoder & Connectors names.")
 
         # 3. VAE Folder Sorting
         vae_files = sorted(glob.glob(os.path.join(models_base, "vae/*")), key=os.path.getsize)
         if len(vae_files) >= 2:
             if not vae_files[0].endswith(".safetensors"):
-                os.rename(vae_files[0], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors"))
+                safe_rename(vae_files[0], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors"))
             if not vae_files[1].endswith(".safetensors"):
-                os.rename(vae_files[1], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_video_vae.safetensors"))
+                safe_rename(vae_files[1], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_video_vae.safetensors"))
             print("Mapped LTX-Video VAE model names.")
 
         # 4. Latent Spatial Upscaler Correction
         upscale_files = glob.glob(os.path.join(models_base, "latent_upscale_models/*"))
         if upscale_files and not upscale_files[0].endswith(".safetensors"):
-            os.rename(upscale_files[0], os.path.join(models_base, "latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors"))
+            safe_rename(upscale_files[0], os.path.join(models_base, "latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors"))
             print("Mapped Spatial Upscaler name.")
 
     elif preset == "LTX-Video-2.3-FP8":
         # 1. Transformer / UNet Model Mapping
         dit_files = glob.glob(os.path.join(models_base, "diffusion_models/*"))
         if dit_files and not dit_files[0].endswith(".gguf") and not dit_files[0].endswith(".safetensors"):
-            os.rename(dit_files[0], os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1-Q8_0.gguf"))
+            safe_rename(dit_files[0], os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-Q8_0.gguf"))
             print("Mapped LTX-Video FP8 Transformer model name.")
-
+ 
         # 2. Text Encoder & Connectors Sorting
         te_files = sorted(glob.glob(os.path.join(models_base, "text_encoders/*")), key=os.path.getsize)
         if len(te_files) >= 2:
             if not te_files[0].endswith(".safetensors"):
-                os.rename(te_files[0], os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"))
-            if not te_files[1].endswith(".safetensors"):
-                os.rename(te_files[1], os.path.join(models_base, "text_encoders/gemma-3-12b-it-UD-IQ2_XXS.gguf"))
+                safe_rename(te_files[0], os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"))
+            if not te_files[1].endswith(".gguf"):
+                safe_rename(te_files[1], os.path.join(models_base, "text_encoders/gemma-3-12b-it-Q6_K.gguf"))
             print("Mapped LTX-Video FP8 Text Encoder & Connectors names.")
 
         # 3. VAE Folder Sorting
         vae_files = sorted(glob.glob(os.path.join(models_base, "vae/*")), key=os.path.getsize)
         if len(vae_files) >= 3:
             if not vae_files[0].endswith(".safetensors"):
-                os.rename(vae_files[0], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors"))
+                safe_rename(vae_files[0], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors"))
             if not vae_files[1].endswith(".safetensors"):
-                os.rename(vae_files[1], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_video_vae.safetensors"))
+                safe_rename(vae_files[1], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_video_vae.safetensors"))
             if not vae_files[2].endswith(".safetensors"):
-                os.rename(vae_files[2], os.path.join(models_base, "vae/taeltx2_3.safetensors"))
+                safe_rename(vae_files[2], os.path.join(models_base, "vae/taeltx2_3.safetensors"))
             print("Mapped LTX-Video FP8 VAE model names.")
         elif len(vae_files) == 2:
             if not vae_files[0].endswith(".safetensors"):
-                os.rename(vae_files[0], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors"))
+                safe_rename(vae_files[0], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_audio_vae.safetensors"))
             if not vae_files[1].endswith(".safetensors"):
-                os.rename(vae_files[1], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_video_vae.safetensors"))
+                safe_rename(vae_files[1], os.path.join(models_base, "vae/ltx-2.3-22b-distilled_video_vae.safetensors"))
             print("Mapped 2 LTX-Video FP8 VAE model names.")
 
         # 4. Latent Spatial Upscaler Correction
         upscale_files = glob.glob(os.path.join(models_base, "latent_upscale_models/*"))
         if upscale_files and not upscale_files[0].endswith(".safetensors"):
-            os.rename(upscale_files[0], os.path.join(models_base, "latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors"))
+            safe_rename(upscale_files[0], os.path.join(models_base, "latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors"))
             print("Mapped Spatial Upscaler 1.1 name.")
 
     elif preset == "Z-Image-Turbo-Q4":
         # 1. Main Base Model Mapping
         dit_files = glob.glob(os.path.join(models_base, "diffusion_models/*"))
         if dit_files and not dit_files[0].endswith(".gguf"):
-            os.rename(dit_files[0], os.path.join(models_base, "diffusion_models/z-image-turbo-Q4_0.gguf"))
+            safe_rename(dit_files[0], os.path.join(models_base, "diffusion_models/z-image-turbo-Q4_0.gguf"))
             print("Mapped Z-Image-Turbo GGUF model name.")
 
         # 2. Text Encoder Mapping
         te_files = glob.glob(os.path.join(models_base, "text_encoders/*"))
         if te_files and not te_files[0].endswith(".gguf"):
-            os.rename(te_files[0], os.path.join(models_base, "text_encoders/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"))
+            safe_rename(te_files[0], os.path.join(models_base, "text_encoders/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"))
             print("Mapped Qwen text encoder name.")
 
         # 3. VAE Mapping
         vae_files = glob.glob(os.path.join(models_base, "vae/*"))
         if vae_files and not vae_files[0].endswith(".safetensors"):
-            os.rename(vae_files[0], os.path.join(models_base, "vae/ae.safetensors"))
+            safe_rename(vae_files[0], os.path.join(models_base, "vae/ae.safetensors"))
             print("Mapped Flux VAE name.")
