@@ -13,6 +13,26 @@ BINARY_FILENAME = "sd_cpp_cuda_built.tar.gz"
 LIGHTNING_SDC_REPO = "https://github.com/leejet/stable-diffusion.cpp.git"
 LIGHTNING_SDC_TAG = "master-672-1f9ee88"
 
+def detect_cuda_architecture(default="80"):
+    """Returns a CMake CUDA architecture value such as 80 for A100."""
+    env_arch = os.environ.get("FREE_AISTUDIO_CUDA_ARCH")
+    if env_arch:
+        return env_arch
+
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        caps = [line.strip().replace(".", "") for line in out.splitlines() if line.strip()]
+        if caps:
+            return caps[0]
+    except Exception:
+        pass
+
+    return default
+
 # Model presets containing component downloads
 MODEL_PRESETS = {
     "LTX-Video-2.3-Q3": {
@@ -109,12 +129,13 @@ def build_binary_from_source(
     bin_dir = os.path.join(target_dir, "bin")
     server_bin = os.path.join(bin_dir, "sd-server")
     build_info_path = os.path.join(target_dir, "build_info.json")
+    cuda_arch = detect_cuda_architecture()
 
     if os.path.exists(server_bin) and os.path.exists(build_info_path) and not force:
         try:
             with open(build_info_path, "r") as f:
                 build_info = json.load(f)
-            if build_info.get("repo_url") == repo_url and build_info.get("tag") == tag:
+            if build_info.get("repo_url") == repo_url and build_info.get("tag") == tag and build_info.get("cuda_arch") == cuda_arch:
                 print(f"Using cached Lightning stable-diffusion.cpp build: {tag}")
                 return
         except Exception:
@@ -134,7 +155,13 @@ def build_binary_from_source(
 
     os.makedirs(build_dir, exist_ok=True)
     subprocess.check_call(
-        ["cmake", "..", "-DSD_CUDA=ON", "-DCMAKE_BUILD_TYPE=Release"],
+        [
+            "cmake",
+            "..",
+            "-DSD_CUDA=ON",
+            "-DCMAKE_BUILD_TYPE=Release",
+            f"-DCMAKE_CUDA_ARCHITECTURES={cuda_arch}",
+        ],
         cwd=build_dir,
     )
     subprocess.check_call(
@@ -158,7 +185,7 @@ def build_binary_from_source(
             os.chmod(dest, 0o755)
 
     with open(build_info_path, "w") as f:
-        json.dump({"repo_url": repo_url, "tag": tag}, f, indent=2)
+        json.dump({"repo_url": repo_url, "tag": tag, "cuda_arch": cuda_arch}, f, indent=2)
 
     print(f"Lightning CUDA engine build complete: {server_bin}")
 

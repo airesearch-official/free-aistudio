@@ -127,6 +127,11 @@ The Lightning launcher caches its source-built CUDA engine. To rebuild against t
 FREE_AISTUDIO_LIGHTNING_FORCE_REBUILD=1 python run_lightning.py
 ```
 
+If CMake cannot detect the GPU architecture during configure, set it explicitly. A100 uses CUDA architecture 80:
+```bash
+FREE_AISTUDIO_CUDA_ARCH=80 FREE_AISTUDIO_LIGHTNING_FORCE_REBUILD=1 python run_lightning.py
+```
+
 To temporarily fall back to the older packaged binary:
 ```bash
 FREE_AISTUDIO_LIGHTNING_USE_RELEASE_BINARY=1 python run_lightning.py
