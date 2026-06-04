@@ -104,7 +104,7 @@ Choose one of the two easy methods to start the UI:
    ```bash
    python run_lightning.py
    ```
-2. The script will automatically restore the execution binary, download the FP8 model weights persistently, launch the background C++ server, and open the Gradio Web UI with a public `*.gradio.live` link.
+2. The script will build the latest tested upstream stable-diffusion.cpp CUDA server for Lightning, download the GGUF Q8 model weights persistently, launch the background C++ server, and open the Gradio Web UI with a public `*.gradio.live` link.
 3. When you are done generating, simply press **`Ctrl + C`** in your terminal to safely stop the background processes and free up GPU memory.
 
 By default, the Lightning launcher enables CPU offload so the high-quality preset can start on 24GB GPUs such as L4. On larger VRAM machines, you can opt into full-GPU loading:
@@ -115,6 +115,16 @@ FREE_AISTUDIO_LIGHTNING_FULL_GPU=1 python run_lightning.py
 The Lightning launcher disables diffusion flash-attention by default because some CUDA kernels can fail during video generation with the Q8 GGUF stack. To compare speed/stability on a larger GPU, opt back in:
 ```bash
 FREE_AISTUDIO_LIGHTNING_DIFFUSION_FA=1 python run_lightning.py
+```
+
+The Lightning launcher caches its source-built CUDA engine. To rebuild against the pinned upstream stable-diffusion.cpp tag:
+```bash
+FREE_AISTUDIO_LIGHTNING_FORCE_REBUILD=1 python run_lightning.py
+```
+
+To temporarily fall back to the older packaged binary:
+```bash
+FREE_AISTUDIO_LIGHTNING_USE_RELEASE_BINARY=1 python run_lightning.py
 ```
 
 ---

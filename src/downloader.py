@@ -4,11 +4,14 @@ import urllib.request
 import tarfile
 import subprocess
 import glob
+import json
 
 # Configuration for GitHub Releases binary
 DEFAULT_REPO = "airesearch-official/free-aistudio"
 DEFAULT_TAG = "v1.0.0"
 BINARY_FILENAME = "sd_cpp_cuda_built.tar.gz"
+LIGHTNING_SDC_REPO = "https://github.com/leejet/stable-diffusion.cpp.git"
+LIGHTNING_SDC_TAG = "master-672-1f9ee88"
 
 # Model presets containing component downloads
 MODEL_PRESETS = {
@@ -95,6 +98,69 @@ def restore_binary(repo=DEFAULT_REPO, tag=DEFAULT_TAG, target_dir="/tmp/sd_bin")
         print(f"❌ Error restoring binary: {e}")
         print("Please check if the GitHub Release tag exists and contains the required file.")
         raise
+
+def build_binary_from_source(
+    target_dir="/teamspace/studios/this_studio/sd_bin",
+    repo_url=LIGHTNING_SDC_REPO,
+    tag=LIGHTNING_SDC_TAG,
+    force=False,
+):
+    """Builds stable-diffusion.cpp with CUDA for Lightning.ai and caches the result."""
+    bin_dir = os.path.join(target_dir, "bin")
+    server_bin = os.path.join(bin_dir, "sd-server")
+    build_info_path = os.path.join(target_dir, "build_info.json")
+
+    if os.path.exists(server_bin) and os.path.exists(build_info_path) and not force:
+        try:
+            with open(build_info_path, "r") as f:
+                build_info = json.load(f)
+            if build_info.get("repo_url") == repo_url and build_info.get("tag") == tag:
+                print(f"Using cached Lightning stable-diffusion.cpp build: {tag}")
+                return
+        except Exception:
+            pass
+
+    print(f"Building stable-diffusion.cpp for Lightning CUDA from {tag}...")
+    os.makedirs(target_dir, exist_ok=True)
+    source_dir = os.path.join(target_dir, "stable-diffusion.cpp")
+    build_dir = os.path.join(source_dir, "build")
+
+    if not os.path.exists(source_dir):
+        subprocess.check_call(["git", "clone", "--recursive", repo_url, source_dir])
+
+    subprocess.check_call(["git", "fetch", "--tags", "origin"], cwd=source_dir)
+    subprocess.check_call(["git", "checkout", tag], cwd=source_dir)
+    subprocess.check_call(["git", "submodule", "update", "--init", "--recursive"], cwd=source_dir)
+
+    os.makedirs(build_dir, exist_ok=True)
+    subprocess.check_call(
+        ["cmake", "..", "-DSD_CUDA=ON", "-DCMAKE_BUILD_TYPE=Release"],
+        cwd=build_dir,
+    )
+    subprocess.check_call(
+        ["cmake", "--build", ".", "--config", "Release", "--parallel"],
+        cwd=build_dir,
+    )
+
+    candidates = glob.glob(os.path.join(build_dir, "**", "sd-server"), recursive=True)
+    candidates += glob.glob(os.path.join(source_dir, "bin", "sd-server"))
+    candidates = [p for p in candidates if os.path.isfile(p)]
+    if not candidates:
+        raise FileNotFoundError("Built sd-server binary was not found after stable-diffusion.cpp build.")
+
+    built_server = candidates[0]
+    built_bin_dir = os.path.dirname(built_server)
+    os.makedirs(bin_dir, exist_ok=True)
+    for item in glob.glob(os.path.join(built_bin_dir, "*")):
+        if os.path.isfile(item):
+            dest = os.path.join(bin_dir, os.path.basename(item))
+            shutil.copy2(item, dest)
+            os.chmod(dest, 0o755)
+
+    with open(build_info_path, "w") as f:
+        json.dump({"repo_url": repo_url, "tag": tag}, f, indent=2)
+
+    print(f"Lightning CUDA engine build complete: {server_bin}")
 
 def remote_file_size(url):
     """Returns the remote file size when the host provides it."""

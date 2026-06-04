@@ -16,7 +16,7 @@ except ImportError:
 # Ensure import paths resolve correctly
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from src.downloader import restore_binary, download_models
+from src.downloader import restore_binary, download_models, build_binary_from_source, LIGHTNING_SDC_TAG
 from src.server import start_server
 from src.ui import build_app
 
@@ -32,9 +32,14 @@ def main():
     load_audio_vae = os.environ.get("FREE_AISTUDIO_DISABLE_AUDIO_VAE", "").lower() not in ("1", "true", "yes", "on")
     diffusion_fa = os.environ.get("FREE_AISTUDIO_LIGHTNING_DIFFUSION_FA", "").lower() in ("1", "true", "yes", "on")
     wait_timeout = int(os.environ.get("FREE_AISTUDIO_SERVER_WAIT_TIMEOUT", "300"))
+    use_upstream_build = os.environ.get("FREE_AISTUDIO_LIGHTNING_USE_RELEASE_BINARY", "").lower() not in ("1", "true", "yes", "on")
+    force_rebuild = os.environ.get("FREE_AISTUDIO_LIGHTNING_FORCE_REBUILD", "").lower() in ("1", "true", "yes", "on")
+    sdc_tag = os.environ.get("FREE_AISTUDIO_LIGHTNING_SDC_TAG", LIGHTNING_SDC_TAG)
     
     # 1. Restore the C++ compilation binary if missing
-    if not os.path.exists(bin_path):
+    if use_upstream_build:
+        build_binary_from_source(target_dir=bin_dir, tag=sdc_tag, force=force_rebuild)
+    elif not os.path.exists(bin_path):
         restore_binary(repo="airesearch-official/free-aistudio", tag="v1.0.0", target_dir=bin_dir)
         
     # 2. Download LTX-Video FP8 weights (downloader skips already completed downloads)
