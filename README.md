@@ -68,24 +68,44 @@ Save one of the user-facing notebooks from this repository to your local machine
 ### Step 3: Run the Cells
 Once imported, you only need to run the pre-made cells in sequence. The notebook will automatically sync the repository code, download the pre-built C++ server binary and optimized model weights, launch the background API inference server, and display your Gradio Web UI link.
 
----
-
 ## ⚡ Quick Start: How to Run on Lightning.ai
 
-You can run the high-quality FP8 model studio in any CUDA-enabled Lightning.ai Studio (e.g., L4 or L40S GPU).
+To run the high-quality FP8 model studio, you need a CUDA-enabled environment. Lightning.ai Studios provide an easy way to configure a GPU instance and clone this project.
 
-### Option A: Using the Jupyter Notebook
-1. Open your Lightning.ai Studio.
-2. In the workspace file explorer, navigate to `notebooks/lightning-video.ipynb`.
-3. Open the notebook and run the cells in sequence.
+### Step 1: Create a Studio and Attach a GPU
+1. Go to [Lightning.ai](https://lightning.ai/) and log in (or create a free account).
+2. Click **Create Studio** in your dashboard.
+3. Once the Studio is created, check the hardware environment in the top-right corner. It defaults to a CPU environment.
+4. Click on the hardware picker and switch to the **L4 GPU** (the recommended cheapest GPU tier with 24GB of VRAM). 
+   > [!IMPORTANT]
+   > Do **NOT** run this in a CPU-only environment, or the engine will fail to initialize.
 
-### Option B: Using the One-Click CLI Script
-1. Open a terminal in your Lightning.ai Studio.
-2. Execute the python runner script:
+### Step 2: Clone the Repository inside the Studio
+1. Open a **Terminal** window in the Studio (you can find it in the bottom panel or by selecting "New Terminal").
+2. Copy and run the following command to clone this repository into your workspace:
+   ```bash
+   git clone https://github.com/airesearch-official/free-aistudio.git
+   ```
+3. Navigate into the cloned folder:
+   ```bash
+   cd free-aistudio
+   ```
+
+### Step 3: Run the Studio
+Choose one of the two easy methods to start the UI:
+
+#### Method A: Using the Jupyter Notebook (Visual Setup)
+1. In the file explorer sidebar on the left of your Studio, open the `free-aistudio` folder, then open the `notebooks` folder.
+2. Double-click **`lightning-video.ipynb`** to open it.
+3. Run the cells in sequence by clicking the **Run** button or pressing `Shift + Enter`. It will set up the binary, fetch the unquantized FP8 models persistently, and launch the UI.
+
+#### Method B: Using the One-Click Script (Terminal Setup)
+1. In your open terminal (inside the `free-aistudio` directory), run:
    ```bash
    python run_lightning.py
    ```
-3. The script will restore the engine binary, check/download the FP8 model weights persistently, launch the background C++ server, and open the Gradio interface. Press `Ctrl+C` in the terminal to cleanly terminate the background processes when you are done.
+2. The script will automatically restore the execution binary, download the FP8 model weights persistently, launch the background C++ server, and open the Gradio Web UI with a public `*.gradio.live` link.
+3. When you are done generating, simply press **`Ctrl + C`** in your terminal to safely stop the background processes and free up GPU memory.
 
 ---
 
