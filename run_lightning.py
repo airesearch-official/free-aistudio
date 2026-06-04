@@ -18,7 +18,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.downloader import restore_binary, download_models, build_binary_from_source, LIGHTNING_SDC_TAG
 from src.server import start_server
-from src.ui import build_app
+from src.ui import build_app, get_working_dir
 
 def detect_cuda_vram_gb():
     try:
@@ -106,7 +106,7 @@ def main():
     app = build_app()
     
     # Generates a shareable URL (share=True) for public web access
-    app.launch(share=True, inline=False)
+    app.launch(share=True, inline=False, allowed_paths=[get_working_dir()])
     
     # Keep the main thread alive and monitor the backend engine process
     try:

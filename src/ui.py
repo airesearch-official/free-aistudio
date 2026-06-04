@@ -157,7 +157,7 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
             "guidance": {"txt_cfg": 5.5, "img_cfg": 5.5, "distilled_guidance": 3.5},
         },
         "vae_tiling_params": get_vae_tiling_params(enable_upscale),
-        "output_format": "avi",
+        "output_format": "webm" if is_lightning_studio() else "avi",
         "output_compression": 100,
     }
 
@@ -211,7 +211,8 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
                 video_bytes = base64.b64decode(status_res["result"]["b64_json"])
                 working_dir = get_working_dir()
                 os.makedirs(working_dir, exist_ok=True)
-                base_video_path = os.path.join(working_dir, f"gen_{job_id}.avi")
+                output_ext = payload["output_format"]
+                base_video_path = os.path.join(working_dir, f"gen_{job_id}.{output_ext}")
                 with open(base_video_path, "wb") as f:
                     f.write(video_bytes)
                 return base_video_path
@@ -287,7 +288,7 @@ def build_app():
 def launch():
     """Convenience function to start UI immediately in Kaggle."""
     app = build_app()
-    app.launch(share=True, inline=False)
+    app.launch(share=True, inline=False, allowed_paths=[get_working_dir()])
 
 # =====================================================================
 # Z-Image-Turbo Image Generation UI Components
@@ -474,4 +475,4 @@ def build_image_app():
 def launch_image():
     """Convenience function to start Z-Image-Turbo UI immediately in Kaggle."""
     app = build_image_app()
-    app.launch(share=True, inline=False)
+    app.launch(share=True, inline=False, allowed_paths=[get_working_dir()])
