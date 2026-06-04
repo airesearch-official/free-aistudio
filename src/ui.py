@@ -215,7 +215,7 @@ def build_failure_message(status_res):
 
     return "Video generation failed.\n\n" + "\n\n".join(parts)
 
-def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_custom_resolution, custom_width, custom_height, duration_seconds, input_image, enable_upscale):
+def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_custom_resolution, custom_width, custom_height, duration_seconds, input_image, enable_upscale, cfg_scale, distilled_guidance, scheduler, flow_shift):
     """Processes frontend inputs and posts generation parameters to the server."""
     if use_custom_resolution:
         width, height = int(custom_width), int(custom_height)
@@ -248,11 +248,15 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
         "moe_boundary": 0.875,
         "vace_strength": 1.0,
         "sample_params": {
-            "scheduler": "ltx2",
+            "scheduler": str(scheduler),
             "sample_method": "euler",
             "sample_steps": int(steps),
-            "flow_shift": 2.37,
-            "guidance": {"txt_cfg": 5.5, "img_cfg": 5.5, "distilled_guidance": 3.5},
+            "flow_shift": float(flow_shift),
+            "guidance": {
+                "txt_cfg": float(cfg_scale),
+                "img_cfg": float(cfg_scale),
+                "distilled_guidance": float(distilled_guidance)
+            },
         },
         "vae_tiling_params": get_vae_tiling_params(enable_upscale),
         "output_format": "avi",
@@ -358,6 +362,12 @@ def build_app():
                 duration_seconds = gr.Slider(minimum=1, maximum=10, value=default_duration, step=0.5, label="Duration Seconds (rounded to valid LTX frame count)")
                 steps = gr.Slider(minimum=4, maximum=30, value=default_steps, step=1, label="Sampling Steps (LTX 2.3 Distilled Sweet Spot: 8-12)")
 
+                with gr.Accordion("Advanced Generation Settings (Fine-Tuning)", open=False):
+                    cfg_scale = gr.Slider(minimum=1.0, maximum=10.0, value=3.0, step=0.1, label="CFG Scale (txt_cfg / img_cfg)")
+                    distilled_guidance = gr.Slider(minimum=1.0, maximum=10.0, value=3.5, step=0.1, label="Distilled Guidance Scale")
+                    scheduler = gr.Dropdown(choices=["discrete", "ltx2"], value="ltx2", label="Inference Scheduler")
+                    flow_shift = gr.Slider(minimum=1.0, maximum=5.0, value=2.37, step=0.01, label="Flow Shift Parameter")
+
                 enable_upscale = gr.Checkbox(label="Enable Native Hi-Res Upscaling Pass", value=False)
                 input_image = gr.Image(label="Input Image (For Image-to-Video)", type="filepath")
                 generate_btn = gr.Button("Generate New Video", variant="primary")
@@ -375,7 +385,11 @@ def build_app():
 
         generate_btn.click(
             fn=handle_generation,
-            inputs=[prompt, neg_prompt, steps, resolution_preset, use_custom_resolution, custom_width, custom_height, duration_seconds, input_image, enable_upscale],
+            inputs=[
+                prompt, neg_prompt, steps, resolution_preset, use_custom_resolution,
+                custom_width, custom_height, duration_seconds, input_image, enable_upscale,
+                cfg_scale, distilled_guidance, scheduler, flow_shift
+            ],
             outputs=output_video,
         ).then(fn=scan_history, outputs=history_gallery)
 
