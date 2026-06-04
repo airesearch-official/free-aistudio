@@ -1,6 +1,7 @@
 import os
 import subprocess
 import time
+import sys
 
 def start_server(
     preset="LTX-Video-2.3-Q3",
@@ -131,10 +132,41 @@ def start_server(
     else:
         raise ValueError(f"Unknown preset: {preset}")
         
+    env = os.environ.copy()
+    
+    # Dynamically inject CUDA & Conda library paths for stable-diffusion.cpp runtime dependency resolution
+    conda_prefix = env.get("CONDA_PREFIX", sys.prefix)
+    conda_lib = os.path.join(conda_prefix, "lib")
+    
+    cuda_paths = [
+        conda_lib,
+        "/usr/local/cuda/lib64",
+        "/usr/local/cuda-12/lib64",
+        "/usr/lib/x86_64-linux-gnu"
+    ]
+    
+    # Add glob matches for cuda-12.*
+    import glob
+    for path in glob.glob("/usr/local/cuda-12.*/lib64"):
+        cuda_paths.append(path)
+        
+    valid_paths = [p for p in cuda_paths if os.path.exists(p)]
+    
+    existing_ld = env.get("LD_LIBRARY_PATH", "")
+    if existing_ld:
+        env["LD_LIBRARY_PATH"] = ":".join(valid_paths) + ":" + existing_ld
+    else:
+        env["LD_LIBRARY_PATH"] = ":".join(valid_paths)
+        
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     log_file = open(log_path, "w")
     
-    process = subprocess.Popen(server_cmd, stdout=log_file, stderr=subprocess.STDOUT)
+    process = subprocess.Popen(
+        server_cmd,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        env=env
+    )
     
     print(f"⏱️ Waiting for API server to become responsive on port {port}...")
     start_time = time.time()
