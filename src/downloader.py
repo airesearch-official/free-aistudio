@@ -33,8 +33,8 @@ MODEL_PRESETS = {
             "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/distilled-1.1/ltx-2.3-22b-distilled-1.1-Q8_0.gguf"
         ],
         "text_encoders": [
-            "https://huggingface.co/GitMylo/LTX-2-comfy_gemma_fp8_e4m3fn/resolve/main/gemma_3_12B_it_fp8_e4m3fn.safetensors",
-            "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/text_encoders/ltx-2.3_text_projection_bf16.safetensors"
+            "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors",
+            "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"
         ],
         "vae": [
             "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/vae/LTX23_video_vae_bf16.safetensors",
@@ -303,9 +303,9 @@ def clean_filenames(preset="LTX-Video-2.3-Q3", models_base="/tmp/models"):
         te_files = sorted(glob.glob(os.path.join(models_base, "text_encoders/*")), key=os.path.getsize)
         if len(te_files) >= 2:
             if not te_files[0].endswith(".safetensors"):
-                os.rename(te_files[0], os.path.join(models_base, "text_encoders/ltx-2.3_text_projection_bf16.safetensors"))
+                os.rename(te_files[0], os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"))
             if not te_files[1].endswith(".safetensors"):
-                os.rename(te_files[1], os.path.join(models_base, "text_encoders/gemma_3_12B_it_fp8_e4m3fn.safetensors"))
+                os.rename(te_files[1], os.path.join(models_base, "text_encoders/gemma_3_12B_it_fp8_scaled.safetensors"))
             print("Mapped LTX-Video FP8 Text Encoder & Connectors names.")
 
         # 3. VAE Folder Sorting

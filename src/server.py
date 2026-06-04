@@ -112,8 +112,8 @@ def start_server(
             bin_path,
             os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1-Q8_0.gguf"),
             os.path.join(models_base, "vae/LTX23_video_vae_bf16.safetensors"),
-            os.path.join(models_base, "text_encoders/gemma_3_12B_it_fp8_e4m3fn.safetensors"),
-            os.path.join(models_base, "text_encoders/ltx-2.3_text_projection_bf16.safetensors"),
+            os.path.join(models_base, "text_encoders/gemma_3_12B_it_fp8_scaled.safetensors"),
+            os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"),
             upscaler_model,
         ]
         
@@ -135,8 +135,8 @@ def start_server(
             "--threads", str(threads),
             "--diffusion-model", os.path.join(models_base, "diffusion_models/ltx-2.3-22b-distilled-1.1-Q8_0.gguf"),
             "--vae", os.path.join(models_base, "vae/LTX23_video_vae_bf16.safetensors"),
-            "--llm", os.path.join(models_base, "text_encoders/gemma_3_12B_it_fp8_e4m3fn.safetensors"),
-            "--embeddings-connectors", os.path.join(models_base, "text_encoders/ltx-2.3_text_projection_bf16.safetensors"),
+            "--llm", os.path.join(models_base, "text_encoders/gemma_3_12B_it_fp8_scaled.safetensors"),
+            "--embeddings-connectors", os.path.join(models_base, "text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"),
             "--hires-upscalers-dir", upscaler_dir,
             "--diffusion-fa",
             "--vae-tiling",
