@@ -56,8 +56,8 @@ def get_vae_tiling_params(enable_upscale):
         return {
             "enabled": True,
             "temporal_tiling": True,
-            "tile_size_x": 8,
-            "tile_size_y": 8,
+            "tile_size_x": 16,
+            "tile_size_y": 16,
             "target_overlap": 0.25,
             "rel_size_x": 0.0,
             "rel_size_y": 0.0,
@@ -112,6 +112,7 @@ def make_preview_video(video_path):
 
     preview_path = os.path.splitext(video_path)[0] + ".mp4"
     try:
+        # 1. Attempt full conversion including audio stream encoding
         subprocess.run(
             [
                 "ffmpeg",
@@ -135,7 +136,31 @@ def make_preview_video(video_path):
         if os.path.exists(preview_path) and os.path.getsize(preview_path) > 0:
             return preview_path
     except Exception:
-        pass
+        # 2. Fallback to video-only conversion if the file has no audio stream
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    video_path,
+                    "-c:v",
+                    "libx264",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-an",
+                    "-movflags",
+                    "+faststart",
+                    preview_path,
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            if os.path.exists(preview_path) and os.path.getsize(preview_path) > 0:
+                return preview_path
+        except Exception:
+            pass
 
     return video_path
 
@@ -201,10 +226,10 @@ def handle_generation(prompt, negative_prompt, steps, resolution_preset, use_cus
         "moe_boundary": 0.875,
         "vace_strength": 1.0,
         "sample_params": {
-            "scheduler": "discrete",
+            "scheduler": "ltx2",
             "sample_method": "euler",
             "sample_steps": int(steps),
-            "flow_shift": 1.3568,
+            "flow_shift": 2.37,
             "guidance": {"txt_cfg": 5.5, "img_cfg": 5.5, "distilled_guidance": 3.5},
         },
         "vae_tiling_params": get_vae_tiling_params(enable_upscale),
